@@ -18,3 +18,21 @@ The default posting client uses OAuth 1.0a user context. OAuth 2.0 client
 credentials are not interchangeable with these values.
 
 Never commit real credentials to a public fork.
+
+## Optional Xquik posting
+
+The existing `twitter-api-v2` client remains the default. To post through
+Xquik instead, set these values in `SECRETS.js` or the runtime environment:
+
+```js
+const TWITTER_BACKEND = "xquik";
+const XQUIK_API_KEY = "YOUR_XQUIK_API_KEY";
+const XQUIK_ACCOUNT = "YOUR_XQUIK_ACCOUNT";
+```
+
+`XQUIK_ACCOUNT` accepts an X username or connected account ID. The bot sends
+text-only posts through Xquik. Each post uses a stable idempotency key and
+waits for the durable write result before reporting success.
+
+Xquik is an independent third-party service. Not affiliated with X Corp.
+"Twitter" and "X" are trademarks of X Corp.
