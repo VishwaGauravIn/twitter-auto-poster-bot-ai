@@ -4,13 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "check": "node --check index.js && node --test",
+    "test": "node --test",
     "start": "node index.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@google/generative-ai": "^0.3.1",
+    "@google/genai": "^2.13.0",
     "twitter-api-v2": "^1.16.1"
   }
 }
