@@ -22,4 +22,8 @@ jobs:
       - name: Install Dependencies
         run: npm i
       - name: Run Twitter bot
+        env:
+          TWITTER_BACKEND: ${{ vars.TWITTER_BACKEND }}
+          XQUIK_ACCOUNT: ${{ vars.XQUIK_ACCOUNT }}
+          XQUIK_API_KEY: ${{ secrets.XQUIK_API_KEY }}
         run: npm start
