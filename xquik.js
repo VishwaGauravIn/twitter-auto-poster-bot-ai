@@ -1,4 +1,4 @@
-const { createHash } = require("node:crypto");
+const { createHash, randomUUID } = require("node:crypto");
 
 const DEFAULT_BACKEND = "twitter-api-v2";
 const XQUIK_API_CONTRACT = "2026-04-29";
@@ -50,14 +50,30 @@ function readXquikConfig(secrets = {}) {
 }
 
 function buildXquikIdempotencyKey(account, tweetText, runId) {
+  if (!isUsableValue(runId)) {
+    throw new Error("Xquik requires a unique run ID.");
+  }
+
   const digest = createHash("sha256")
     .update(account)
     .update("\0")
     .update(tweetText)
     .update("\0")
-    .update(isUsableValue(runId) ? runId.trim() : "local")
+    .update(runId.trim())
     .digest("hex");
   return `twitter-auto-poster:x:${digest}`;
+}
+
+function readRunId(dependencies) {
+  const environment = dependencies.environment ?? process.env;
+
+  if (isUsableValue(dependencies.runId)) {
+    return dependencies.runId.trim();
+  }
+  if (isUsableValue(environment.GITHUB_RUN_ID)) {
+    return environment.GITHUB_RUN_ID.trim();
+  }
+  return (dependencies.createRunId ?? randomUUID)();
 }
 
 function sleep(milliseconds) {
@@ -248,7 +264,7 @@ async function postXquikTweet(tweetText, secrets = {}, dependencies = {}) {
   const pollTimeoutMs =
     dependencies.pollTimeoutMs ?? XQUIK_POLL_TIMEOUT_MS;
   const signalFactory = dependencies.signalFactory ?? requestSignal;
-  const runId = dependencies.runId ?? process.env.GITHUB_RUN_ID;
+  const runId = readRunId(dependencies);
   const config = readXquikConfig(secrets);
   const authHeaders = {
     "x-api-key": config.apiKey,

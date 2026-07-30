@@ -34,5 +34,13 @@ const XQUIK_ACCOUNT = "YOUR_XQUIK_ACCOUNT";
 text-only posts through Xquik. Each post uses a stable idempotency key and
 waits for the durable write result before reporting success.
 
+GitHub Actions users can keep Xquik settings outside the repository:
+
+1. Add the `TWITTER_BACKEND` repository variable with value `xquik`.
+2. Add the `XQUIK_ACCOUNT` repository variable.
+3. Add the `XQUIK_API_KEY` Actions secret.
+
+The included workflow passes these values to the bot.
+
 Xquik is an independent third-party service. Not affiliated with X Corp.
 "Twitter" and "X" are trademarks of X Corp.

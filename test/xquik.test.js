@@ -61,6 +61,38 @@ test("builds a stable key for one account and workflow run", () => {
   assert.match(first, /^twitter-auto-poster:x:[0-9a-f]{64}$/);
 });
 
+test("uses a unique key for each local posting run", async () => {
+  const idempotencyKeys = [];
+  const runIds = ["local-run-1", "local-run-2"];
+  const fetchImpl = async (url, init) => {
+    idempotencyKeys.push(init.headers["Idempotency-Key"]);
+    return createResponse(200, {
+      result: { id: "tweet-1", type: "tweet" },
+      status: "success",
+      success: true,
+      terminal: true,
+      writeActionId: "action-1",
+    });
+  };
+  const options = dependencies(fetchImpl, {
+    createRunId: () => runIds.shift(),
+    environment: {},
+  });
+  const secrets = {
+    XQUIK_ACCOUNT: "test-account",
+    XQUIK_API_KEY: "test-key",
+  };
+
+  await postXquikTweet("same post", secrets, options);
+  await postXquikTweet("same post", secrets, options);
+
+  assert.deepEqual(idempotencyKeys, [
+    buildXquikIdempotencyKey("test-account", "same post", "local-run-1"),
+    buildXquikIdempotencyKey("test-account", "same post", "local-run-2"),
+  ]);
+  assert.notEqual(idempotencyKeys[0], idempotencyKeys[1]);
+});
+
 test("posts with the durable Xquik contract", async () => {
   let request;
   const fetchImpl = async (url, init) => {
