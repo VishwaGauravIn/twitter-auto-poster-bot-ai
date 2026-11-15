@@ -7,6 +7,7 @@ const path = require("path");
 const fs = require("fs");
 const { chromium } = require("playwright");
 const GenAI = require("@google/generative-ai");
+const { generateContent } = require("./content_engine");
 const { generateEpfoTweet, savePostedHeadline } = require("./epfo_content");
 const { generateTweetImage } = require("./image_generator");
 
@@ -151,7 +152,7 @@ async function postThreadViaBrowser(thread, imagePath = null) {
 }
 
 async function executePostingWorkflow() {
-  const { thread, tweetText, insight, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
+  const { thread, tweetText, insight, headline, source, pubDate, resourceTitle, resourceUrl } = await generateContent(genAI);
 
   // Generate high-res branded news card image for Tweet 1
   let imagePath = null;

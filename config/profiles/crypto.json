@@ -1,0 +1,16 @@
+{
+  "id": "crypto",
+  "name": "Crypto & Web3 Markets",
+  "accountHandle": "@YourCryptoHandle",
+  "brandName": "CRYPTO & WEB3 RADAR",
+  "websiteName": "yourcryptoblog.com",
+  "websiteUrl": "https://yourcryptoblog.com",
+  "sitemapUrl": "https://yourcryptoblog.com/sitemap.xml",
+  "hashtags": ["#Crypto", "#Bitcoin", "#Ethereum", "#Web3", "#Blockchain", "#DeFi"],
+  "focusKeywords": ["Bitcoin", "Ethereum", "Crypto", "Web3", "SEC", "DeFi", "Blockchain", "Solana"],
+  "rssFeeds": [
+    "https://www.coindesk.com/arc/outboundfeeds/rss/",
+    "https://cointelegraph.com/rss"
+  ],
+  "description": "Pre-configured profile for cryptocurrency and blockchain news and thread generation."
+}

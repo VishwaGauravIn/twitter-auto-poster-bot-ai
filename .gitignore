@@ -1,6 +1,4 @@
 node_modules
-.env
-.env.local
 
 secrets.json
 SECRETS.js
@@ -16,3 +14,4 @@ daily_runner.log
 # Local tooling & caches
 __pycache__/
 .claude/
+config.bat
