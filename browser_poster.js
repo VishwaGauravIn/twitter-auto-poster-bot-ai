@@ -25,12 +25,10 @@ async function fetchLatestEpfoNews() {
       { headers: { "User-Agent": "Mozilla/5.0" } }
     );
     const xml = await res.text();
-    const items = xml.match(/<title>(.*?)<\/title>/g) || [];
-    
-    // Clean headline text and strip publisher suffix
-    const headlines = items
-      .map((t) => t.replace(/<\/?title>/g, "").replace(/ - .*$/, "").trim())
-      .filter((h) => h && h !== "Google News");
+    const itemMatches = [...xml.matchAll(/<item>[\s\S]*?<title>(.*?)<\/title>/g)].map(
+      (m) => m[1].replace(/ - .*$/, "").trim()
+    );
+    const headlines = itemMatches.filter((h) => h && !h.includes("Google News"));
 
     console.log(`Found ${headlines.length} recent EPFO headlines.`);
     return headlines;

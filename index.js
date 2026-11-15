@@ -40,10 +40,10 @@ async function fetchLatestEpfoNews() {
       { headers: { "User-Agent": "Mozilla/5.0" } }
     );
     const xml = await res.text();
-    const items = xml.match(/<title>(.*?)<\/title>/g) || [];
-    const headlines = items
-      .map((t) => t.replace(/<\/?title>/g, "").replace(/ - .*$/, "").trim())
-      .filter((h) => h && h !== "Google News");
+    const itemMatches = [...xml.matchAll(/<item>[\s\S]*?<title>(.*?)<\/title>/g)].map(
+      (m) => m[1].replace(/ - .*$/, "").trim()
+    );
+    const headlines = itemMatches.filter((h) => h && !h.includes("Google News"));
     return headlines;
   } catch (err) {
     console.warn("⚠️ RSS fetch failed, using fallback:", err.message);
