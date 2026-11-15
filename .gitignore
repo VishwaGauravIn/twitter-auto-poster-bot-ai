@@ -7,3 +7,5 @@ SECRETS.js
 
 # Playwright browser profile session
 .twitter_user_data
+last_error.png
+posted_articles.json

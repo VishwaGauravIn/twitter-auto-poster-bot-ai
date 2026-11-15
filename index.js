@@ -1,4 +1,5 @@
 // By VishwaGauravIn (https://itsvg.in)
+// Updated for @EPFOCompliance — Live EPFO News, Circulars & Compliance Advisories
 require("dotenv").config();
 const GenAI = require("@google/generative-ai");
 const { TwitterApi } = require("twitter-api-v2");
@@ -22,11 +23,6 @@ if (!GEMINI_API_KEY) {
   process.exit(1);
 }
 
-if (!APP_KEY || !APP_SECRET || !ACCESS_TOKEN || !ACCESS_SECRET) {
-  console.error("Error: Twitter credentials are incomplete. Please set APP_KEY, APP_SECRET, ACCESS_TOKEN, and ACCESS_SECRET.");
-  process.exit(1);
-}
-
 const twitterClient = new TwitterApi({
   appKey: APP_KEY,
   appSecret: APP_SECRET,
@@ -36,9 +32,24 @@ const twitterClient = new TwitterApi({
 
 const genAI = new GenAI.GoogleGenerativeAI(GEMINI_API_KEY);
 
-const generationConfig = {
-  maxOutputTokens: 400,
-};
+async function fetchLatestEpfoNews() {
+  console.log("📰 Fetching latest published EPFO news & blogs...");
+  try {
+    const res = await fetch(
+      "https://news.google.com/rss/search?q=EPFO+when:2d&hl=en-IN&gl=IN&ceid=IN:en",
+      { headers: { "User-Agent": "Mozilla/5.0" } }
+    );
+    const xml = await res.text();
+    const items = xml.match(/<title>(.*?)<\/title>/g) || [];
+    const headlines = items
+      .map((t) => t.replace(/<\/?title>/g, "").replace(/ - .*$/, "").trim())
+      .filter((h) => h && h !== "Google News");
+    return headlines;
+  } catch (err) {
+    console.warn("⚠️ RSS fetch failed, using fallback:", err.message);
+    return [];
+  }
+}
 
 async function sendTweet(tweetText) {
   try {
@@ -56,20 +67,33 @@ async function sendTweet(tweetText) {
 }
 
 async function run() {
-  // Use gemini-3.5-flash-lite / gemini-3.5-flash
+  const headlines = await fetchLatestEpfoNews();
+  const headline =
+    headlines.length > 0
+      ? headlines[0]
+      : "EPFO compliance updates: Joint Declaration SOP and e-Nomination mandatory for EDLI";
+
+  console.log(`✨ Selected news: "${headline}"`);
+  console.log("🤖 Generating EPFO compliance tweet via Gemini AI...");
+
   const model = genAI.getGenerativeModel({
     model: "gemini-3.5-flash-lite",
-    generationConfig,
+    generationConfig: { maxOutputTokens: 300 },
   });
 
-  // Prompt configuration
-  const prompt =
-    "generate a recent indian polity today news, advices and question ask on those news; under 280 characters and should be plain text, you can use emojis and trending hastags";
+  const prompt = `You are @EPFOCompliance, the leading authority on EPFO (Employees' Provident Fund Organisation) rules, circulars, and compliance updates in India.
 
-  console.log("Generating tweet content via Gemini AI...");
+Context / Latest News: "${headline}"
+
+Write a timely, authoritative compliance advisory tweet for PF members, HR professionals, and employers.
+Rules:
+1. Under 230 characters strictly.
+2. Actionable advice: Highlight the rule, deadline, or member benefit (e.g., ECR deadline, KYC seeding, UAN link, Form 31/19, Joint Declaration).
+3. Plain text only. Include 2-3 focused hashtags: #EPFO #EPF #PFCompliance #UAN.
+4. No quotes or markdown fences.`;
+
   const result = await model.generateContent(prompt);
-  const response = await result.response;
-  const text = response.text().trim();
+  const text = (await result.response).text().trim().replace(/^["']|["']$/g, "");
   console.log("\n--- Generated Tweet Content ---\n" + text + "\n-------------------------------\n");
 
   console.log("Posting tweet to Twitter...");
