@@ -171,33 +171,46 @@ async function postThreadViaBrowser(thread, imagePath = null) {
   }
 }
 
+async function executePostingWorkflow() {
+  const { thread, tweetText, insight, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
+
+  // Generate high-res branded news card image for Tweet 1
+  let imagePath = null;
+  try {
+    imagePath = await generateTweetImage({
+      headline,
+      insight,
+      resourceTitle,
+      resourceUrl,
+      source,
+      pubDate,
+    });
+  } catch (imgErr) {
+    console.warn("⚠️ Image generation warning:", imgErr.message);
+  }
+
+  // Post the 3-part thread simultaneously
+  await postThreadViaBrowser(thread, imagePath);
+  savePostedHeadline(headline, source, pubDate);
+  console.log(`✨ All done! Promoted: ${resourceTitle} (${resourceUrl})`);
+  return { headline, source, resourceTitle, resourceUrl, thread };
+}
+
 async function main() {
   try {
-    const { thread, tweetText, insight, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
-
-    // Generate high-res branded news card image for Tweet 1
-    let imagePath = null;
-    try {
-      imagePath = await generateTweetImage({
-        headline,
-        insight,
-        resourceTitle,
-        resourceUrl,
-        source,
-        pubDate,
-      });
-    } catch (imgErr) {
-      console.warn("⚠️ Image generation warning:", imgErr.message);
-    }
-
-    // Post the 3-part thread simultaneously
-    await postThreadViaBrowser(thread, imagePath);
-    savePostedHeadline(headline, source, pubDate);
-    console.log(`✨ All done! Promoted: ${resourceTitle} (${resourceUrl})`);
+    await executePostingWorkflow();
   } catch (err) {
     console.error("Execution failed:", err.message || err);
     process.exit(1);
   }
 }
 
-main();
+module.exports = {
+  postThreadViaBrowser,
+  executePostingWorkflow,
+  main
+};
+
+if (require.main === module) {
+  main();
+}
