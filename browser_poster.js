@@ -50,7 +50,6 @@ async function postTweetViaBrowser(tweetText) {
     await page.waitForTimeout(3000);
 
     // Reliable check for logged-in user:
-    // When logged in, X shows the account switcher (avatar/@handle) or home navigation tab on the left sidebar
     const loggedInIndicator = page.locator(
       '[data-testid="SideNav_AccountSwitcher_Button"], a[data-testid="AppTabBar_Home_Link"], [data-testid="SideNav_NewTweet_Button"]'
     ).first();
@@ -63,16 +62,13 @@ async function postTweetViaBrowser(tweetText) {
       console.log("============================================================");
       console.log("Microsoft Edge is open on your screen.");
       console.log("👉 Please LOG IN to your Twitter/X account in the browser.");
-      console.log("⏳ Take your time! The browser will NOT close automatically.");
-      console.log("   (As soon as you finish logging in, this script will continue)\n");
+      console.log("⏳ Take your time! The browser will NOT close automatically.\n");
 
-      // If login modal isn't already visible, navigate to login
       const currentUrl = page.url();
-      if (!currentUrl.includes("/login") && !currentUrl.includes("/i/flow/login") && (await page.locator('input[autocomplete="username"]').count()) === 0) {
+      if (!currentUrl.includes("/login") && !currentUrl.includes("/i/flow/login")) {
         await page.goto("https://x.com/i/flow/login", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
       }
 
-      // Wait patiently up to 10 minutes for user to complete login
       await loggedInIndicator.waitFor({ state: "visible", timeout: 600000 });
       await page.waitForTimeout(4000);
       console.log("✅ Login confirmed! Your session has been permanently saved.\n");
@@ -82,20 +78,19 @@ async function postTweetViaBrowser(tweetText) {
 
     console.log("📝 Opening tweet composer...");
 
-    // Make sure we are on the home page
     if (!page.url().includes("/home")) {
       await page.goto("https://x.com/home", { waitUntil: "domcontentloaded", timeout: 30000 });
       await page.waitForTimeout(2000);
     }
 
-    // Click the sidebar "Post" button to pop up the clean compose dialog
+    // Click the sidebar "Post" button to open the compose modal
     const sideNavPostBtn = page.locator('a[data-testid="SideNav_NewTweet_Button"], button[data-testid="SideNav_NewTweet_Button"]').first();
     if (await sideNavPostBtn.isVisible().catch(() => false)) {
       await sideNavPostBtn.click();
       await page.waitForTimeout(1000);
     }
 
-    // Locate the compose textbox (in modal or inline)
+    // Locate the compose textbox
     const textbox = page.locator('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]').first();
     await textbox.waitFor({ state: "visible", timeout: 15000 });
     console.log("✍️ Typing tweet content into composer...");
@@ -103,24 +98,29 @@ async function postTweetViaBrowser(tweetText) {
     await textbox.click();
     await page.waitForTimeout(500);
 
-    // Use native keyboard insertion to trigger Lexical / React handlers
+    // Insert text natively through keyboard
     await page.keyboard.insertText(tweetText);
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1000);
 
-    // Locate Post button
-    console.log("🔍 Locating 'Post' button...");
-    const postButton = page.locator('button[data-testid="tweetButton"], button[data-testid="tweetButtonInline"]').first();
-    await postButton.waitFor({ state: "visible", timeout: 10000 });
+    // Press Escape to dismiss any hashtag/mention autocomplete popup dropdown
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
 
-    const isEnabled = await postButton.isEnabled();
-    if (!isEnabled) {
-      throw new Error("Post button is disabled (content may exceed character limits).");
+    console.log("🚀 Publishing tweet (Control+Enter & Force-Click)...");
+
+    // Primary action: Control+Enter is the native Twitter shortcut to post a tweet
+    await page.keyboard.press("Control+Enter");
+    await page.waitForTimeout(2000);
+
+    // Fallback: If modal is still open, force-click the Post button bypassing any overlay/tooltip
+    const postButton = page.locator('button[data-testid="tweetButton"]').first();
+    const isStillVisible = await postButton.isVisible().catch(() => false);
+    if (isStillVisible) {
+      console.log("👉 Force-clicking 'Post' button...");
+      await postButton.click({ force: true });
     }
 
-    console.log("🚀 Clicking 'Post' button...");
-    await postButton.click();
-
-    // Wait for tweet submission to finish
+    // Wait for the tweet submission to complete
     await page.waitForTimeout(5000);
     console.log("🎉 Tweet posted successfully to your Twitter profile!");
 
