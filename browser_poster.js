@@ -1,6 +1,6 @@
 // Free Browser-based Twitter / X Auto-Poster via Playwright & Microsoft Edge
-// Dedicated for @EPFOCompliance — Posts live EPFO news, circulars & compliance advisories.
-// Automatically matches and promotes https://corporatecompliance.in tools and blogs with high-res branded image cards.
+// Dedicated for @EPFOCompliance — Posts live 3-part EPFO compliance threads with actionable solutions,
+// high-res branded news card images, and exact links to https://corporatecompliance.in blogs and tools.
 
 require("dotenv").config();
 const path = require("path");
@@ -19,7 +19,7 @@ if (!GEMINI_API_KEY) {
 const genAI = new GenAI.GoogleGenerativeAI(GEMINI_API_KEY);
 const USER_DATA_DIR = path.join(__dirname, ".twitter_user_data");
 
-async function postTweetViaBrowser(tweetText, imagePath = null) {
+async function postThreadViaBrowser(thread, imagePath = null) {
   console.log("🌐 Launching Microsoft Edge browser...");
   const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
     channel: "msedge",
@@ -66,7 +66,7 @@ async function postTweetViaBrowser(tweetText, imagePath = null) {
       await page.waitForTimeout(2000);
     }
 
-    // Click the sidebar "Post" button to trigger the composer modal
+    // Click the sidebar "Post" button to trigger the modal dialog
     const sideNavPostBtn = page.locator('a[data-testid="SideNav_NewTweet_Button"], button[data-testid="SideNav_NewTweet_Button"]').first();
     if (await sideNavPostBtn.isVisible().catch(() => false)) {
       await sideNavPostBtn.click();
@@ -79,59 +79,83 @@ async function postTweetViaBrowser(tweetText, imagePath = null) {
     const isModalOpen = await modal.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (isModalOpen) {
-      console.log("🎯 Scoped to active tweet modal dialog (avoids background mask obstruction)...");
+      console.log("🎯 Scoped to active tweet modal dialog...");
       scope = modal;
     } else {
       console.log("ℹ️ Modal not detected, using inline composer...");
     }
 
-    // Locate textbox strictly within the active scope
-    const textbox = scope.locator('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]').first();
-    await textbox.waitFor({ state: "visible", timeout: 15000 });
+    // 1. Tweet 1 (Hook + Infographic Image)
+    const textbox0 = scope.locator('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]').first();
+    await textbox0.waitFor({ state: "visible", timeout: 15000 });
 
-    console.log("✍️ Focusing and typing tweet content into composer...");
-    await textbox.click({ force: true });
+    console.log("✍️ Typing Tweet 1/3 (Hook & News Alert)...");
+    await textbox0.click({ force: true });
     await page.waitForTimeout(500);
-
-    await page.keyboard.insertText(tweetText);
+    await page.keyboard.insertText(thread[0]);
     await page.waitForTimeout(1000);
 
-    // Press Escape to dismiss any hashtag/mention popup dropdown
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(500);
-
-    // Attach image if present
+    // Attach image card to Tweet 1
     if (imagePath && fs.existsSync(imagePath)) {
-      console.log("📸 Attaching branded news card image to tweet...");
+      console.log("📸 Attaching branded news card image to Tweet 1...");
       const fileInput = scope.locator('input[data-testid="fileInput"], input[type="file"]').first();
       await fileInput.setInputFiles(imagePath);
       console.log("⏳ Waiting for image upload preview to render...");
       await scope.locator('[data-testid="attachments"], div[aria-label="Image"], button[aria-label="Remove media"]').first().waitFor({ state: "visible", timeout: 25000 }).catch(() => {});
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(2500);
     }
 
-    console.log("🚀 Publishing tweet (Control+Enter & Force-Click fallback)...");
+    // 2. Add Tweet 2 & Tweet 3 to form the thread
+    const addBtn = scope.locator('button[data-testid="addButton"], div[aria-label="Add post"], button[aria-label="Add post"]').first();
+    const canAddPost = await addBtn.isVisible().catch(() => false);
 
-    // Primary action: Control+Enter
-    await page.keyboard.press("Control+Enter");
-    await page.waitForTimeout(3000);
+    if (canAddPost && thread.length > 1) {
+      console.log("➕ Clicking 'Add post' to compose Tweet 2/3 (Step-by-Step Solution)...");
+      await addBtn.click();
+      await page.waitForTimeout(1000);
 
-    // Fallback: If modal or post button is still visible, force-click Post button
-    const postButton = scope.locator('button[data-testid="tweetButton"], button[data-testid="tweetButtonInline"]').first();
-    const isStillVisible = await postButton.isVisible().catch(() => false);
-    if (isStillVisible) {
-      console.log("👉 Force-clicking 'Post' button...");
-      await postButton.click({ force: true });
-    }
+      const textbox1 = scope.locator('div[data-testid="tweetTextarea_1"]').first();
+      await textbox1.waitFor({ state: "visible", timeout: 10000 });
+      await textbox1.click({ force: true });
+      await page.waitForTimeout(500);
+      await page.keyboard.insertText(thread[1]);
+      await page.waitForTimeout(1000);
 
-    // Confirm modal closes or wait 5 seconds
-    if (isModalOpen) {
-      await modal.waitFor({ state: "hidden", timeout: 20000 }).catch(() => {});
+      if (thread.length > 2) {
+        console.log("➕ Clicking 'Add post' to compose Tweet 3/3 (Guide & Blog Link)...");
+        await addBtn.click();
+        await page.waitForTimeout(1000);
+
+        const textbox2 = scope.locator('div[data-testid="tweetTextarea_2"]').first();
+        await textbox2.waitFor({ state: "visible", timeout: 10000 });
+        await textbox2.click({ force: true });
+        await page.waitForTimeout(500);
+        await page.keyboard.insertText(thread[2]);
+        await page.waitForTimeout(1000);
+      }
     } else {
-      await page.waitForTimeout(4000);
+      console.warn("ℹ️ Native Add post button not found; posting Tweet 1 as main update.");
     }
 
-    console.log("🎉 Tweet with image card posted successfully to @EPFOCompliance!");
+    // Dismiss any autocomplete popovers
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
+
+    console.log("🚀 Publishing full thread ('Post all' / Control+Enter)...");
+    const postAllBtn = scope.locator('button[data-testid="tweetButton"]').first();
+    if (await postAllBtn.isVisible().catch(() => false)) {
+      await postAllBtn.click({ force: true });
+    } else {
+      await page.keyboard.press("Control+Enter");
+    }
+
+    // Confirm post modal closes
+    if (isModalOpen) {
+      await modal.waitFor({ state: "hidden", timeout: 25000 }).catch(() => {});
+    }
+    await page.waitForTimeout(4000);
+
+    console.log("🎉 Complete 3-part EPFO compliance thread posted successfully to @EPFOCompliance!");
 
   } catch (err) {
     console.error("❌ Browser automation error:", err.message);
@@ -149,12 +173,9 @@ async function postTweetViaBrowser(tweetText, imagePath = null) {
 
 async function main() {
   try {
-    const { tweetText, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
+    const { thread, tweetText, insight, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
 
-    // Extract insight (the first line of the tweet before blank line)
-    const insight = tweetText.split("\n\n")[0] || headline;
-
-    // Generate high-res branded news card image
+    // Generate high-res branded news card image for Tweet 1
     let imagePath = null;
     try {
       imagePath = await generateTweetImage({
@@ -166,10 +187,11 @@ async function main() {
         pubDate,
       });
     } catch (imgErr) {
-      console.warn("⚠️ Image generation warning, falling back to text tweet:", imgErr.message);
+      console.warn("⚠️ Image generation warning:", imgErr.message);
     }
 
-    await postTweetViaBrowser(tweetText, imagePath);
+    // Post the 3-part thread simultaneously
+    await postThreadViaBrowser(thread, imagePath);
     savePostedHeadline(headline, source, pubDate);
     console.log(`✨ All done! Promoted: ${resourceTitle} (${resourceUrl})`);
   } catch (err) {

@@ -1,6 +1,6 @@
 // By VishwaGauravIn (https://itsvg.in)
-// Updated for @EPFOCompliance — Live EPFO News & Compliance Advisories
-// Automatically matches and promotes https://corporatecompliance.in tools and blogs with high-res branded image cards.
+// Updated for @EPFOCompliance — Live 3-Part EPFO Compliance Threads
+// Automatically matches and promotes https://corporatecompliance.in blogs and tools with step-by-step solutions and high-res image cards.
 
 require("dotenv").config();
 const fs = require("fs");
@@ -37,7 +37,7 @@ const twitterClient = new TwitterApi({
 
 const genAI = new GenAI.GoogleGenerativeAI(GEMINI_API_KEY);
 
-async function sendTweet(tweetText, imagePath = null) {
+async function sendThread(thread, imagePath = null) {
   try {
     let mediaId = null;
     if (imagePath && fs.existsSync(imagePath)) {
@@ -46,15 +46,32 @@ async function sendTweet(tweetText, imagePath = null) {
       console.log("✅ Image uploaded. Media ID:", mediaId);
     }
 
-    const payload = { text: tweetText };
-    if (mediaId) {
-      payload.media = { media_ids: [mediaId] };
-    }
+    // Tweet 1 (Hook + Image)
+    const tweet1Res = await twitterClient.v2.tweet({
+      text: thread[0],
+      media: mediaId ? { media_ids: [mediaId] } : undefined,
+    });
+    console.log("🎉 Tweet 1/3 posted! ID:", tweet1Res.data.id);
 
-    const res = await twitterClient.v2.tweet(payload);
-    console.log("🎉 Tweet sent successfully via Twitter API! Tweet ID:", res.data.id);
+    // Tweet 2 (Step-by-step Solution)
+    if (thread.length > 1) {
+      const tweet2Res = await twitterClient.v2.tweet({
+        text: thread[1],
+        reply: { in_reply_to_tweet_id: tweet1Res.data.id },
+      });
+      console.log("🎉 Tweet 2/3 posted! ID:", tweet2Res.data.id);
+
+      // Tweet 3 (Caveat & Blog Link)
+      if (thread.length > 2) {
+        const tweet3Res = await twitterClient.v2.tweet({
+          text: thread[2],
+          reply: { in_reply_to_tweet_id: tweet2Res.data.id },
+        });
+        console.log("🎉 Tweet 3/3 posted! ID:", tweet3Res.data.id);
+      }
+    }
   } catch (error) {
-    console.error("Error sending tweet to Twitter API:");
+    console.error("Error sending thread to Twitter API:");
     if (error.data) {
       console.error(JSON.stringify(error.data, null, 2));
     } else {
@@ -65,9 +82,7 @@ async function sendTweet(tweetText, imagePath = null) {
 }
 
 async function run() {
-  const { tweetText, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
-
-  const insight = tweetText.split("\n\n")[0] || headline;
+  const { thread, tweetText, insight, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
 
   let imagePath = null;
   try {
@@ -83,8 +98,8 @@ async function run() {
     console.warn("⚠️ Image generation warning:", imgErr.message);
   }
 
-  console.log("Posting tweet with image to Twitter API...");
-  await sendTweet(tweetText, imagePath);
+  console.log("Posting complete 3-part thread to Twitter API...");
+  await sendThread(thread, imagePath);
   savePostedHeadline(headline, source, pubDate);
   console.log(`✨ All done! Promoted: ${resourceTitle} (${resourceUrl})`);
 }
