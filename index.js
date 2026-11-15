@@ -1,11 +1,13 @@
 // By VishwaGauravIn (https://itsvg.in)
 // Updated for @EPFOCompliance — Live EPFO News & Compliance Advisories
-// Automatically matches and promotes https://corporatecompliance.in tools and blogs.
+// Automatically matches and promotes https://corporatecompliance.in tools and blogs with high-res branded image cards.
 
 require("dotenv").config();
+const fs = require("fs");
 const GenAI = require("@google/generative-ai");
 const { TwitterApi } = require("twitter-api-v2");
 const { generateEpfoTweet, savePostedHeadline } = require("./epfo_content");
+const { generateTweetImage } = require("./image_generator");
 
 // Load credentials from environment variables or SECRETS.js fallback
 let fileSecrets = {};
@@ -35,9 +37,21 @@ const twitterClient = new TwitterApi({
 
 const genAI = new GenAI.GoogleGenerativeAI(GEMINI_API_KEY);
 
-async function sendTweet(tweetText) {
+async function sendTweet(tweetText, imagePath = null) {
   try {
-    const res = await twitterClient.v2.tweet(tweetText);
+    let mediaId = null;
+    if (imagePath && fs.existsSync(imagePath)) {
+      console.log("📸 Uploading image to Twitter media endpoint...");
+      mediaId = await twitterClient.v1.uploadMedia(imagePath);
+      console.log("✅ Image uploaded. Media ID:", mediaId);
+    }
+
+    const payload = { text: tweetText };
+    if (mediaId) {
+      payload.media = { media_ids: [mediaId] };
+    }
+
+    const res = await twitterClient.v2.tweet(payload);
     console.log("🎉 Tweet sent successfully via Twitter API! Tweet ID:", res.data.id);
   } catch (error) {
     console.error("Error sending tweet to Twitter API:");
@@ -53,8 +67,24 @@ async function sendTweet(tweetText) {
 async function run() {
   const { tweetText, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
 
-  console.log("Posting tweet to Twitter API...");
-  await sendTweet(tweetText);
+  const insight = tweetText.split("\n\n")[0] || headline;
+
+  let imagePath = null;
+  try {
+    imagePath = await generateTweetImage({
+      headline,
+      insight,
+      resourceTitle,
+      resourceUrl,
+      source,
+      pubDate,
+    });
+  } catch (imgErr) {
+    console.warn("⚠️ Image generation warning:", imgErr.message);
+  }
+
+  console.log("Posting tweet with image to Twitter API...");
+  await sendTweet(tweetText, imagePath);
   savePostedHeadline(headline, source, pubDate);
   console.log(`✨ All done! Promoted: ${resourceTitle} (${resourceUrl})`);
 }

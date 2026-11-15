@@ -1,12 +1,14 @@
 // Free Browser-based Twitter / X Auto-Poster via Playwright & Microsoft Edge
 // Dedicated for @EPFOCompliance — Posts live EPFO news, circulars & compliance advisories.
-// Automatically matches and promotes https://corporatecompliance.in tools and blogs.
+// Automatically matches and promotes https://corporatecompliance.in tools and blogs with high-res branded image cards.
 
 require("dotenv").config();
 const path = require("path");
+const fs = require("fs");
 const { chromium } = require("playwright");
 const GenAI = require("@google/generative-ai");
 const { generateEpfoTweet, savePostedHeadline } = require("./epfo_content");
+const { generateTweetImage } = require("./image_generator");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
@@ -17,7 +19,7 @@ if (!GEMINI_API_KEY) {
 const genAI = new GenAI.GoogleGenerativeAI(GEMINI_API_KEY);
 const USER_DATA_DIR = path.join(__dirname, ".twitter_user_data");
 
-async function postTweetViaBrowser(tweetText) {
+async function postTweetViaBrowser(tweetText, imagePath = null) {
   console.log("🌐 Launching Microsoft Edge browser...");
   const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
     channel: "msedge",
@@ -74,8 +76,18 @@ async function postTweetViaBrowser(tweetText) {
     // Locate textbox
     const textbox = page.locator('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]').first();
     await textbox.waitFor({ state: "visible", timeout: 15000 });
-    console.log("✍️ Typing tweet content into composer...");
 
+    // Attach image if present
+    if (imagePath && fs.existsSync(imagePath)) {
+      console.log("📸 Attaching branded news card image to tweet...");
+      const fileInput = page.locator('input[data-testid="fileInput"], input[type="file"]').first();
+      await fileInput.setInputFiles(imagePath);
+      console.log("⏳ Waiting for image upload preview...");
+      await page.locator('[data-testid="attachments"], div[aria-label="Image"]').first().waitFor({ state: "visible", timeout: 15000 }).catch(() => {});
+      await page.waitForTimeout(2500);
+    }
+
+    console.log("✍️ Typing tweet content into composer...");
     await textbox.click();
     await page.waitForTimeout(500);
 
@@ -101,7 +113,7 @@ async function postTweetViaBrowser(tweetText) {
     }
 
     await page.waitForTimeout(5000);
-    console.log("🎉 Tweet posted successfully to @EPFOCompliance!");
+    console.log("🎉 Tweet with image card posted successfully to @EPFOCompliance!");
 
   } catch (err) {
     console.error("❌ Browser automation error:", err.message);
@@ -120,7 +132,26 @@ async function postTweetViaBrowser(tweetText) {
 async function main() {
   try {
     const { tweetText, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
-    await postTweetViaBrowser(tweetText);
+
+    // Extract insight (the first line of the tweet before blank line)
+    const insight = tweetText.split("\n\n")[0] || headline;
+
+    // Generate high-res branded news card image
+    let imagePath = null;
+    try {
+      imagePath = await generateTweetImage({
+        headline,
+        insight,
+        resourceTitle,
+        resourceUrl,
+        source,
+        pubDate,
+      });
+    } catch (imgErr) {
+      console.warn("⚠️ Image generation warning, falling back to text tweet:", imgErr.message);
+    }
+
+    await postTweetViaBrowser(tweetText, imagePath);
     savePostedHeadline(headline, source, pubDate);
     console.log(`✨ All done! Promoted: ${resourceTitle} (${resourceUrl})`);
   } catch (err) {

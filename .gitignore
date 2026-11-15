@@ -9,6 +9,7 @@ SECRETS.js
 .twitter_user_data
 last_error.png
 posted_articles.json
+generated_tweet_image.png
 
 # Local tooling & caches
 __pycache__/
