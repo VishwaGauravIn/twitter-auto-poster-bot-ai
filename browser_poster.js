@@ -22,7 +22,7 @@ async function generateTweetContent() {
   });
 
   const prompt =
-    "generate a recent indian polity today news, advices and question ask on those news; under 250 characters, plain text only, use emojis and trending hashtags. No quotes or markdown.";
+    "generate a recent indian polity today news, advices and question ask on those news; under 240 characters, plain text only, use emojis and trending hashtags. No quotes or markdown.";
 
   const result = await model.generateContent(prompt);
   const text = (await result.response).text().trim().replace(/^["']|["']$/g, "");
@@ -38,72 +38,76 @@ async function postTweetViaBrowser(tweetText) {
   const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
     channel: "msedge",
     headless: false,
-    viewport: { width: 1280, height: 800 },
+    viewport: { width: 1280, height: 850 },
     args: ["--disable-blink-features=AutomationControlled"],
   });
 
   const page = context.pages().length > 0 ? context.pages()[0] : await context.newPage();
 
   try {
-    console.log("🔍 Navigating to Twitter / X Home...");
+    console.log("🔍 Checking Twitter / X session...");
     await page.goto("https://x.com/home", { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.waitForTimeout(3000);
 
-    // Check login state
-    const currentUrl = page.url();
-    const isLoggedOut =
-      currentUrl.includes("/login") ||
-      currentUrl.includes("/i/flow/login") ||
-      (await page.locator('a[href="/login"]').count()) > 0;
+    // Reliable check for logged-in user:
+    // When logged in, X shows the account switcher (avatar/@handle) or home navigation tab on the left sidebar
+    const loggedInIndicator = page.locator(
+      '[data-testid="SideNav_AccountSwitcher_Button"], a[data-testid="AppTabBar_Home_Link"], [data-testid="SideNav_NewTweet_Button"]'
+    ).first();
 
-    if (isLoggedOut) {
-      console.log("\n⚠️ NOT LOGGED IN YET!");
-      console.log("👉 Please log into your Twitter/X account in the opened Edge browser window.");
-      console.log("⏳ Waiting up to 2 minutes for you to complete login...\n");
+    const isLoggedIn = await loggedInIndicator.isVisible().catch(() => false);
 
-      await page.waitForURL((url) => !url.href.includes("/login") && !url.href.includes("/i/flow/login"), {
-        timeout: 120000,
-      });
+    if (!isLoggedIn) {
+      console.log("\n============================================================");
+      console.log("🔑 TWITTER / X LOGIN REQUIRED (ONE-TIME SETUP)");
+      console.log("============================================================");
+      console.log("Microsoft Edge is open on your screen.");
+      console.log("👉 Please LOG IN to your Twitter/X account in the browser.");
+      console.log("⏳ Take your time! The browser will NOT close automatically.");
+      console.log("   (As soon as you finish logging in, this script will continue)\n");
+
+      // If login modal isn't already visible, navigate to login
+      const currentUrl = page.url();
+      if (!currentUrl.includes("/login") && !currentUrl.includes("/i/flow/login") && (await page.locator('input[autocomplete="username"]').count()) === 0) {
+        await page.goto("https://x.com/i/flow/login", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+      }
+
+      // Wait patiently up to 10 minutes for user to complete login
+      await loggedInIndicator.waitFor({ state: "visible", timeout: 600000 });
       await page.waitForTimeout(4000);
-      console.log("✅ Login successful! Session saved for future runs.");
+      console.log("✅ Login confirmed! Your session has been permanently saved.\n");
     } else {
       console.log("✅ Authenticated session detected.");
     }
 
-    console.log("📝 Finding tweet composer...");
+    console.log("📝 Opening tweet composer...");
 
-    // Strategy 1: Check if the inline textbox is already visible on the home page
-    let textbox = page.locator('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]').first();
-    let isTextboxReady = await textbox.isVisible({ timeout: 4000 }).catch(() => false);
-
-    // Strategy 2: If inline textbox not visible, click the sidebar "Post" button to open modal
-    if (!isTextboxReady) {
-      console.log("👉 Clicking sidebar 'Post' button to open composer...");
-      const sideNavPostBtn = page.locator('a[data-testid="SideNav_NewTweet_Button"], button[data-testid="SideNav_NewTweet_Button"]').first();
-      if (await sideNavPostBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await sideNavPostBtn.click();
-        await page.waitForTimeout(1500);
-      } else {
-        // Strategy 3: Try keyboard shortcut 'n' which opens tweet composer on Twitter
-        console.log("👉 Triggering tweet composer via keyboard shortcut 'n'...");
-        await page.keyboard.press("KeyN");
-        await page.waitForTimeout(1500);
-      }
+    // Make sure we are on the home page
+    if (!page.url().includes("/home")) {
+      await page.goto("https://x.com/home", { waitUntil: "domcontentloaded", timeout: 30000 });
+      await page.waitForTimeout(2000);
     }
 
-    // Now wait for the textbox in either home feed or compose modal
-    textbox = page.locator('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]').first();
+    // Click the sidebar "Post" button to pop up the clean compose dialog
+    const sideNavPostBtn = page.locator('a[data-testid="SideNav_NewTweet_Button"], button[data-testid="SideNav_NewTweet_Button"]').first();
+    if (await sideNavPostBtn.isVisible().catch(() => false)) {
+      await sideNavPostBtn.click();
+      await page.waitForTimeout(1000);
+    }
+
+    // Locate the compose textbox (in modal or inline)
+    const textbox = page.locator('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]').first();
     await textbox.waitFor({ state: "visible", timeout: 15000 });
-    console.log("✍️ Composer ready! Typing tweet content...");
+    console.log("✍️ Typing tweet content into composer...");
 
     await textbox.click();
     await page.waitForTimeout(500);
 
-    // Insert text natively through keyboard to trigger Lexical / Draft.js change handlers
+    // Use native keyboard insertion to trigger Lexical / React handlers
     await page.keyboard.insertText(tweetText);
     await page.waitForTimeout(1500);
 
-    // Locate the Post button (either modal or inline)
+    // Locate Post button
     console.log("🔍 Locating 'Post' button...");
     const postButton = page.locator('button[data-testid="tweetButton"], button[data-testid="tweetButtonInline"]').first();
     await postButton.waitFor({ state: "visible", timeout: 10000 });
@@ -116,17 +120,16 @@ async function postTweetViaBrowser(tweetText) {
     console.log("🚀 Clicking 'Post' button...");
     await postButton.click();
 
-    // Wait for the tweet to send and UI to settle
+    // Wait for tweet submission to finish
     await page.waitForTimeout(5000);
     console.log("🎉 Tweet posted successfully to your Twitter profile!");
 
   } catch (err) {
     console.error("❌ Browser automation error:", err.message);
-    // Take a screenshot of the error state so we can see what happened
     const screenshotPath = path.join(__dirname, "last_error.png");
     try {
       await page.screenshot({ path: screenshotPath });
-      console.log(`📸 Saved diagnostic screenshot to: ${screenshotPath}`);
+      console.log(`📸 Diagnostic screenshot saved to: ${screenshotPath}`);
     } catch (_) {}
     throw err;
   } finally {
