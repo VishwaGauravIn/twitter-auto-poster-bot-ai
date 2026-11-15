@@ -1,6 +1,7 @@
 // epfo_content.js — Unified EPFO News Fetcher, Search Analytics Ranker & Twitter Thread Generator
 // Dedicated to promoting https://corporatecompliance.in tools and blogs on @EPFOCompliance.
 // Generates detailed 3-part threads with actionable step-by-step solutions and exact blog links.
+// Enforces strict source priority: Tier 0 (PIB, Gazette, @officialepfo) > Tier 1 (Mainstream Media) > Tier 2 (Online Blogs).
 
 const fs = require("fs");
 const path = require("path");
@@ -15,27 +16,50 @@ const HISTORY_FILE = path.join(__dirname, "posted_articles.json");
 
 // Exported alias for compatibility
 const CORPORATE_RESOURCES = CURATED_RESOURCES;
+
 // Google Search Analytics & Impression Weights for EPFO Topics
 const HIGH_SEARCH_INTENT_MAP = [
   { regex: /\b(balance|passbook|whatsapp|sms)\b/i, score: 35, tag: "Passbook/Balance" },
   { regex: /\b(withdraw|withdrawal|auto-claim|advance|form 31|form 19|settlement|limit)\b/i, score: 35, tag: "Withdrawal/Claims" },
   { regex: /\b(interest|interest rate|credited|credit)\b/i, score: 30, tag: "Interest Rate" },
   { regex: /\b(pension|eps-?95|higher pension)\b/i, score: 30, tag: "Pension" },
-  { regex: /\b(wage ceiling|15,?000|21,?000)\b/i, score: 25, tag: "Wage Ceiling" },
+  { regex: /\b(wage ceiling|15,?000|21,?000|25,?000)\b/i, score: 25, tag: "Wage Ceiling" },
   { regex: /\b(edli|insurance|e-nomination|nominee|7 lakh)\b/i, score: 25, tag: "EDLI/Insurance" },
   { regex: /\b(reject|rejection|claim rejected)\b/i, score: 25, tag: "Claim Rejection" },
   { regex: /\b(joint declaration|sop|date of exit|overlap|profile correction)\b/i, score: 20, tag: "SOP/Joint Declaration" },
-  { regex: /\b(ecr|vishwas|damages|14b|7q|challan)\b/i, score: 20, tag: "ECR/Compliance" }
+  { regex: /\b(ecr|vishwas|damages|14b|7q|challan|amnesty)\b/i, score: 25, tag: "ECR/Compliance" }
 ];
 
 const NEGATIVE_INTENT_MAP = [
-  { regex: /\b(quiz|celebrate|celebrates|foundation day|cricket|sports|hockey|awareness camp|webinar|seminar|meeting held)\b/i, penalty: 30 }
+  { regex: /\b(quiz|celebrate|celebrates|foundation day|cricket|sports|hockey|awareness camp|webinar|seminar|meeting held|spardha|cultural)\b/i, penalty: 40 }
 ];
 
-const TIER1_SOURCES = [
-  "economic times", "livemint", "financial express", "business standard",
-  "times of india", "ndtv", "hindu", "indian express", "moneycontrol", "cnbc", "pib"
-];
+// Source Classification: Tier 0 (Official) > Tier 1 (Mainstream Media) > Tier 2 (Online Blogs)
+function getSourceTier(article) {
+  const src = (article.source || "").toLowerCase();
+  const title = (article.title || "").toLowerCase();
+
+  // Tier 0: Official Verified Sources (PIB, Gazette notifications, @officialepfo / @socialepfo, epfindia.gov.in)
+  const isPib = src.includes("pib") || title.includes("pib") || title.includes("press information bureau") || src.includes("press information bureau");
+  const isGazette = src.includes("gazette") || title.includes("gazette notification") || src.includes("egazette") || title.includes("official circular") || src.includes("epfindia") || src.includes("epfo.gov");
+  const isTwitter = src.includes("twitter") || src.includes("x.com") || title.includes("@officialepfo") || title.includes("@socialepfo") || title.includes("officialepfo") || title.includes("socialepfo");
+
+  if (isPib) return { tier: 0, tierName: "Official Verified (PIB)", sourceBadge: "🏛️ Press Information Bureau (PIB)", priorityBonus: 80 };
+  if (isGazette) return { tier: 0, tierName: "Official Verified (Gazette)", sourceBadge: "📜 Official Gazette Notification", priorityBonus: 75 };
+  if (isTwitter) return { tier: 0, tierName: "Official Verified (Twitter)", sourceBadge: "🐦 @officialepfo Official Post", priorityBonus: 70 };
+
+  // Tier 1: Well-Known Mainstream Media Groups
+  const mainstream = [
+    "economic times", "livemint", "business standard", "financial express",
+    "times of india", "ndtv", "the hindu", "hindu", "indian express", "moneycontrol", "cnbc", "dd news"
+  ];
+  if (mainstream.some((m) => src.includes(m))) {
+    return { tier: 1, tierName: "Mainstream Media", sourceBadge: article.source, priorityBonus: 30 };
+  }
+
+  // Tier 2: Other Online Blogs & Media Portals
+  return { tier: 2, tierName: "Online Media/Blog", sourceBadge: article.source, priorityBonus: 5 };
+}
 
 function scoreArticle(article) {
   let score = 0;
@@ -54,37 +78,53 @@ function scoreArticle(article) {
     }
   }
 
-  const isTier1 = TIER1_SOURCES.some((s) => article.source.toLowerCase().includes(s));
-  if (isTier1) score += 15;
+  const tierInfo = getSourceTier(article);
+  score += tierInfo.priorityBonus;
 
   const recencyBonus = Math.round(((30 - article.daysAgo) / 30) * 10);
   score += Math.max(0, recencyBonus);
 
-  return { ...article, score, matchedTags, isTier1 };
+  return { ...article, score, matchedTags, ...tierInfo };
 }
 
 async function fetchTopImpressionEpfoNews() {
-  console.log("📰 Fetching published EPFO news from the past 30 days (Google Search Analytics)...");
+  console.log("📰 Fetching published EPFO news (PIB, Gazette, @officialepfo, then Mainstream Media)...");
 
   const rssQueries = [
-    "https://news.google.com/rss/search?q=EPFO+when:30d&hl=en-IN&gl=IN&ceid=IN:en",
-    "https://news.google.com/rss/search?q=EPF+withdrawal+OR+pension+OR+passbook+when:30d&hl=en-IN&gl=IN&ceid=IN:en",
-    "https://news.google.com/rss/search?q=EPFO+circular+OR+guidelines+OR+%22wage+ceiling%22+when:30d&hl=en-IN&gl=IN&ceid=IN:en"
+    // Priority 1: Official PIB releases
+    { url: "https://news.google.com/rss/search?q=(EPFO+OR+%22Employees+Provident+Fund%22)+site:pib.gov.in+when:30d&hl=en-IN&gl=IN&ceid=IN:en", defaultSource: "Press Information Bureau (PIB)" },
+    { url: "https://news.google.com/rss/search?q=(EPFO+OR+%22Employees+Provident+Fund%22)+(%22PIB%22+OR+%22Press+Information+Bureau%22)+when:30d&hl=en-IN&gl=IN&ceid=IN:en", defaultSource: "Press Information Bureau (PIB)" },
+
+    // Priority 2: Official Gazette notifications & statutory circulars
+    { url: "https://news.google.com/rss/search?q=(EPFO+OR+%22Employees+Provident+Fund%22)+(%22gazette+notification%22+OR+%22official+circular%22)+when:30d&hl=en-IN&gl=IN&ceid=IN:en", defaultSource: "Official Gazette / Circular" },
+
+    // Priority 3: Official Twitter posts (@officialepfo / @socialepfo)
+    { url: "https://news.google.com/rss/search?q=(%22@officialepfo%22+OR+%22@socialepfo%22+OR+%22officialepfo%22+OR+%22socialepfo%22)+when:30d&hl=en-IN&gl=IN&ceid=IN:en", defaultSource: "Official EPFO Twitter (@officialepfo)" },
+
+    // Priority 4: Mainstream Media & Google News trends
+    { url: "https://news.google.com/rss/search?q=EPFO+when:30d&hl=en-IN&gl=IN&ceid=IN:en", defaultSource: "News" },
+    { url: "https://news.google.com/rss/search?q=EPF+withdrawal+OR+pension+OR+passbook+when:30d&hl=en-IN&gl=IN&ceid=IN:en", defaultSource: "News" },
+    { url: "https://news.google.com/rss/search?q=EPFO+circular+OR+guidelines+OR+%22wage+ceiling%22+when:30d&hl=en-IN&gl=IN&ceid=IN:en", defaultSource: "News" }
   ];
 
   const allArticles = new Map();
 
-  for (const queryUrl of rssQueries) {
+  for (const q of rssQueries) {
     try {
-      const res = await fetch(queryUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+      const res = await fetch(q.url, { headers: { "User-Agent": "Mozilla/5.0" } });
       const xml = await res.text();
-      const items = [...xml.matchAll(/<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<source[^>]*>(.*?)<\/source>[\s\S]*?<\/item>/g)];
+      const items = [...xml.matchAll(/<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?(?:<source[^>]*>(.*?)<\/source>)?[\s\S]*?<\/item>/g)];
 
       for (const m of items) {
-        const rawTitle = m[1];
+        const rawTitle = m[1].replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&amp;/g, "&");
         const pubDateStr = m[2];
-        const source = m[3] || "News";
-        const cleanTitle = rawTitle.replace(/ - [^-]+$/, "").trim();
+        let source = (m[3] || q.defaultSource).trim();
+        let cleanTitle = rawTitle;
+        if (rawTitle.includes(" - ")) {
+          const parts = rawTitle.split(" - ");
+          source = parts.pop().trim() || source;
+          cleanTitle = parts.join(" - ").trim();
+        }
         const pubDate = new Date(pubDateStr);
         const ageMs = Date.now() - pubDate.getTime();
         const daysAgo = Math.max(0, ageMs / (1000 * 60 * 60 * 24));
@@ -141,11 +181,37 @@ async function generateEpfoTweet(genAI) {
 
   console.log(`📊 Filtered to ${scoredArticles.length} unposted candidate stories.`);
 
-  const topCandidates = scoredArticles.slice(0, 5);
+  // Hierarchical Tier Separation:
+  // Tier 0: Official (PIB, Gazette, @officialepfo) -> Checked FIRST!
+  // Tier 1: Mainstream Media (ET, Mint, BS, CNBC, TOI) -> Checked SECOND!
+  // Tier 2: Online Blogs & Portals -> Fallback
+  const tier0Candidates = scoredArticles.filter((a) => a.tier === 0 && a.score > 25);
+  const tier1Candidates = scoredArticles.filter((a) => a.tier === 1);
+  const tier2Candidates = scoredArticles.filter((a) => a.tier === 2);
+
+  let candidatePool = [];
+  let tierLabel = "";
+
+  if (tier0Candidates.length > 0) {
+    console.log(`\n🏛️ PRIORITY 1 ACTIVE: Found ${tier0Candidates.length} unposted OFFICIAL releases (PIB / Gazette / @officialepfo).`);
+    candidatePool = tier0Candidates;
+    tierLabel = "Official Verified Source (PIB / Gazette / @officialepfo)";
+  } else if (tier1Candidates.length > 0) {
+    console.log(`\n📰 PRIORITY 2 ACTIVE: No unposted official releases available. Checking Mainstream Media (${tier1Candidates.length} available)...`);
+    candidatePool = tier1Candidates;
+    tierLabel = "Mainstream Media (The Economic Times, Mint, CNBC, BS, TOI)";
+  } else {
+    console.log(`\n🌐 PRIORITY 3 ACTIVE: Checking Online Blogs & Reference Portals (${tier2Candidates.length} available)...`);
+    candidatePool = tier2Candidates;
+    tierLabel = "Online Media / Reference Blogs";
+  }
+
+  const topCandidates = candidatePool.slice(0, 5);
 
   let selectedHeadline = "";
   let selectedSource = "";
   let selectedPubDate = "";
+  let selectedTierName = "";
 
   const model = genAI.getGenerativeModel({
     model: "gemini-3.5-flash-lite",
@@ -157,51 +223,55 @@ async function generateEpfoTweet(genAI) {
   });
 
   if (topCandidates.length > 0) {
-    console.log("\n--- Top High-Impression Candidates (Past 30 Days) ---");
+    console.log(`\n--- Top High-Impression Candidates [${tierLabel}] ---`);
     topCandidates.forEach((c, idx) => {
-      console.log(`[#${idx + 1}] Score: ${c.score} | ${c.daysAgo}d ago | ${c.source} | ${c.title}`);
+      console.log(`[#${idx + 1}] Score: ${c.score} | ${c.daysAgo}d ago | ${c.sourceBadge || c.source} | ${c.title}`);
     });
 
     const candidatesPayload = topCandidates.map((c, idx) => ({
       index: idx + 1,
       title: c.title,
-      source: c.source,
+      source: c.sourceBadge || c.source,
+      tier: c.tierName,
       daysAgo: c.daysAgo,
       score: c.score,
       topics: c.matchedTags
     }));
 
     const editorPrompt = `You are the Senior SEO & Search Analytics Editor for @EPFOCompliance.
-Analyze these top candidate EPFO news stories published within the past 30 days:
+Analyze these top candidate EPFO news stories from our prioritized source pool (${tierLabel}):
 ${JSON.stringify(candidatesPayload, null, 2)}
 
-Task: Select the single story with the HIGHEST public search impression demand in India today.
+Task: Select the single story with the HIGHEST public search impression demand and statutory significance in India today.
 Return JSON: { "selectedIndex": <number>, "selectedHeadline": "<title>" }`;
 
     try {
-      console.log("🤖 Gemini AI selecting top search impression candidate...");
+      console.log("🤖 Gemini AI evaluating top candidate from prioritized tier...");
       const result = await model.generateContent(editorPrompt);
       const parsed = JSON.parse((await result.response).text());
 
       const chosenCandidate = topCandidates.find((c, idx) => idx + 1 === parsed.selectedIndex) || topCandidates[0];
       selectedHeadline = chosenCandidate.title;
-      selectedSource = chosenCandidate.source;
+      selectedSource = chosenCandidate.sourceBadge || chosenCandidate.source;
       selectedPubDate = chosenCandidate.pubDate;
-      console.log(`🎯 AI Selected: [Score: ${chosenCandidate.score}] ${selectedHeadline}`);
+      selectedTierName = chosenCandidate.tierName || "Verified Source";
+      console.log(`🎯 AI Selected: [Score: ${chosenCandidate.score}] [${selectedSource}] ${selectedHeadline}`);
     } catch (parseErr) {
       console.warn("⚠️ AI selection fallback to top candidate:", parseErr.message);
       const topOne = topCandidates[0];
       selectedHeadline = topOne.title;
-      selectedSource = topOne.source;
+      selectedSource = topOne.sourceBadge || topOne.source;
       selectedPubDate = topOne.pubDate;
+      selectedTierName = topOne.tierName || "Verified Source";
     }
   }
 
   // Fallback topic if no unposted RSS stories available
   if (!selectedHeadline) {
-    selectedHeadline = "EPFO brings PF balance, passbook and transaction details to WhatsApp: What subscribers can access";
-    selectedSource = "The Times of India";
+    selectedHeadline = "EPFO Sets October 31 Deadline for Filing ECR Under Revised Wage Ceiling";
+    selectedSource = "🏛️ Press Information Bureau (PIB)";
     selectedPubDate = new Date().toISOString();
+    selectedTierName = "Official Verified (PIB)";
   }
 
   // Dynamically synchronize live website resources from corporatecompliance.in
@@ -217,11 +287,13 @@ Write an authoritative, high-engagement 3-part Twitter/X THREAD about this devel
 
 News Headline: "${selectedHeadline}"
 Source: "${selectedSource}"
+Source Authority: "${selectedTierName}"
 Topic Facts / Solution from our website guide: "${resource.solutionFacts}"
 
 CRITICAL RULES FOR EACH TWEET:
 1. TWEET 1 (Hook & Alert):
    - Crisp announcement of the news and what it means for PF members/employers.
+   - If Source is Official (PIB, Gazette, @officialepfo), state it authoritatively (e.g. "[Official PIB Alert]" or "[Official Gazette Notice]").
    - End with: "Thread 👇 (1/3)"
    - STRICT LENGTH: Under 220 characters. NO links or hashtags.
 
@@ -283,6 +355,7 @@ module.exports = {
   HIGH_SEARCH_INTENT_MAP,
   syncCorporateResources,
   matchCorporateResource,
+  getSourceTier,
   scoreArticle,
   fetchTopImpressionEpfoNews,
   getPostedHistory,
