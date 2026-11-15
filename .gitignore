@@ -4,3 +4,6 @@ node_modules
 
 secrets.json
 SECRETS.js
+
+# Playwright browser profile session
+.twitter_user_data
