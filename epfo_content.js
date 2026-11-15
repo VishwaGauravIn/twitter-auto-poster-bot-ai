@@ -4,193 +4,17 @@
 
 const fs = require("fs");
 const path = require("path");
+const {
+  syncCorporateResources,
+  matchCorporateResource,
+  CURATED_RESOURCES,
+  FALLBACK_RESOURCES
+} = require("./corporate_catalog");
 
 const HISTORY_FILE = path.join(__dirname, "posted_articles.json");
 
-// Exhaustive directory of all live blogs and tools on corporatecompliance.in
-// Each entry includes specific solution facts to supply the exact "how-to" in Tweet 2!
-const CORPORATE_RESOURCES = [
-  // 1. Blog: EPFO 3.0 WhatsApp, UPI & Auto-settlement Reality Check
-  {
-    keywords: ["whatsapp", "upi", "auto-settlement", "epfo 3.0", "epraapti", "e-praapti", "dormant", "atm card", "bhim", "8796441800", "passbook on whatsapp"],
-    title: "EPFO 3.0: WhatsApp, UPI & Auto-Settlement Reality Check",
-    cta: "Read full verified guide & breakdown:",
-    url: "https://corporatecompliance.in/blog/epfo-2026-digital-updates-whatsapp-upi-auto-settlement",
-    solutionFacts: "Save official WhatsApp bot +91 8796441800. Send 'Hi' from your UAN-registered mobile. Access PF balance, last 5 transactions & passbook instantly. Service is strictly read-only. Auto-settlement applies only to inoperative balances up to ₹1,000."
-  },
-  // 2. Blog: ECR Error RFE-3 (DOJ/DOE Missing)
-  {
-    keywords: ["rfe-3", "doj missing", "doe missing", "date of joining", "date of exit missing", "ecr error rfe", "member profile missing"],
-    title: "Fix ECR Error RFE-3 (Missing DOJ/DOE)",
-    cta: "Step-by-step ECR RFE-3 fix guide:",
-    url: "https://corporatecompliance.in/blog/epfo-ecr-error-rfe-3-uan-not-linked-doj-doe-missing",
-    solutionFacts: "Fix missing Date of Joining/Exit in employer Unified Portal member profile before generating monthly ECR challan. Ensure UAN-Aadhaar linking is verified."
-  },
-  // 3. Blog: PF Overlap & Date of Exit Fix (Dual employment / BGV)
-  {
-    keywords: ["overlap", "dual employment", "exit date", "date of exit", "bgv", "relieving", "two uans", "overlapping service"],
-    title: "Fix PF Overlap & Exit Date Guide",
-    cta: "Guide to resolve PF overlap & exit dates:",
-    url: "https://corporatecompliance.in/blog/epf-overlap-vindictive-employer-bgv-failure-guide",
-    solutionFacts: "Resolve overlapping service dates causing BGV failures. Submit Joint Declaration with relieving letters, resignation acceptance, and salary slips via EPFiGMS."
-  },
-  // 4. Blog: ECR Error - UAN Not a Member of Pension Scheme
-  {
-    keywords: ["uan is not a member", "uan not a member", "pension scheme error", "ecr pension error"],
-    title: "ECR Error Fix Guide (UAN Not Pension Member)",
-    cta: "Guide to resolve ECR pension scheme error:",
-    url: "https://corporatecompliance.in/blog/epfo-ecr-error-uan-not-member-pension-scheme",
-    solutionFacts: "Occurs when employee joined EPF after age 58 or is excluded. Set EPS contribution to 0 in the ECR text/CSV file and mark non-contributory to upload successfully."
-  },
-  // 5. Blog: VISHWAS Scheme ROI & Math Breakdown
-  {
-    keywords: ["vishwas roi", "vishwas math", "cost benefit", "damages vs litigation", "14b waiver roi"],
-    title: "EPFO VISHWAS Scheme Financial Analysis",
-    cta: "VISHWAS dispute & damages breakdown:",
-    url: "https://corporatecompliance.in/blog/epfo-vishwas-scheme-roi-math-cost-benefit-analysis",
-    solutionFacts: "Compare financial cost of settling pending PF litigation under VISHWAS to waive up to 100% 14B damages versus continuing expensive CGIT litigation."
-  },
-  // 6. Blog: VISHWAS Scheme & Startup Funding Due Diligence
-  {
-    keywords: ["startup funding", "due diligence", "cgit appeal", "m&a pf liability", "venture funding pf"],
-    title: "Clearing Due Diligence via VISHWAS Scheme",
-    cta: "How VISHWAS clears due diligence:",
-    url: "https://corporatecompliance.in/blog/epfo-vishwas-scheme-startup-funding-due-diligence-cgit",
-    solutionFacts: "Clear pending PF assessment orders and Section 7A liabilities through VISHWAS to unblock venture funding rounds, M&A due diligence, and statutory audits."
-  },
-  // 7. Blog: Unregistered Contractors & Principal Employer Liability
-  {
-    keywords: ["unregistered contractor", "principal employer default", "contractor default pf", "contract labor pf"],
-    title: "Principal Employer Contractor PF Guide",
-    cta: "Principal employer contractor liability guide:",
-    url: "https://corporatecompliance.in/blog/epfo-vishwas-scheme-unregistered-contractor-principal-employer",
-    solutionFacts: "Principal employers can regularize unregistered contract workers' PF arrears and avoid joint recovery notices or prosecution under Section 14."
-  },
-  // 8. Blog: Contractor Liability & Vendor Compliance
-  {
-    keywords: ["contractor liability", "vendor default", "vendor pf compliance", "subcontractor pf"],
-    title: "Contractor PF Liability Management",
-    cta: "Contractor PF default & compliance guide:",
-    url: "https://corporatecompliance.in/blog/epfo-vishwas-scheme-contractor-liability-principal-employer",
-    solutionFacts: "Audit monthly contractor ECR challans, electronic contribution slips, and wage registers before releasing contractor invoices to prevent 7A liability."
-  },
-  // 9. Blog: VISHWAS Scheme December Deadline & Portal Guide
-  {
-    keywords: ["vishwas deadline", "december deadline", "employer portal guide", "vishwas scheme portal"],
-    title: "EPFO VISHWAS Employer Portal Guide",
-    cta: "Step-by-step VISHWAS portal application guide:",
-    url: "https://corporatecompliance.in/blog/epfo-vishwas-scheme-december-deadline-employer-portal-guide",
-    solutionFacts: "Navigate the EPFO Unified Employer Portal to file Form VISHWAS, upload assessment copies, and remit agreed arrears before the deadline expires."
-  },
-  // 10. Blog: VISHWAS 2026 PF Damages & Dispute Resolution
-  {
-    keywords: ["vishwas 2026", "pf damages", "dispute resolution", "14b damages", "7q interest", "penalty waiver", "amnesty"],
-    title: "EPFO VISHWAS 2026 Dispute Resolution Guide",
-    cta: "Read full VISHWAS damages resolution guide:",
-    url: "https://corporatecompliance.in/blog/epfo-vishwas-scheme-2026-pf-damages-dispute-resolution-guide",
-    solutionFacts: "Understand statutory formula for Section 14B damages waiver and 7Q interest remittance to close long-standing EPFO recovery proceedings."
-  },
-  // 11. Blog: Form 10D Aadhaar Not Verified (Legacy Pension Claim)
-  {
-    keywords: ["form 10d", "pension claim", "aadhaar not verified", "legacy account", "physical claim 10d"],
-    title: "Form 10D Legacy Account Pension Fix",
-    cta: "How to fix Form 10D pension claim:",
-    url: "https://corporatecompliance.in/blog/epfo-form-10d-aadhaar-not-verified-legacy-account",
-    solutionFacts: "Submit physical Form 10D with bank manager certification and joint declaration when legacy member records lack biometric Aadhaar seeding."
-  },
-  // 12. Blog: ECR Error RFE-37 & RFE-25 (POHW 1.16% Extra Pension)
-  {
-    keywords: ["rfe-37", "rfe-25", "pohw", "1.16%", "higher wages pension", "higher pension ecr error"],
-    title: "Fix ECR Error RFE-37 / RFE-25 (1.16% POHW)",
-    cta: "Step-by-step RFE-37 resolution guide:",
-    url: "https://corporatecompliance.in/blog/epfo-ecr-error-rfe-37-rfe-25-pohw-1-16-percent",
-    solutionFacts: "Calculate and remit the mandatory 1.16% additional employer contribution on wages above ₹15,000 for approved higher pension members in monthly ECR."
-  },
-  // 13. Tool: PF Balance & Interest Calculator
-  {
-    keywords: ["balance", "passbook", "pf calculator", "interest rate", "compound", "accumulated balance"],
-    title: "EPF Balance & Interest Calculator",
-    cta: "Calculate your EPF balance & interest growth:",
-    url: "https://corporatecompliance.in/tools/pf-calculator",
-    solutionFacts: "Calculate compound annual interest growth at 8.25% on combined employee and employer PF contributions."
-  },
-  // 14. Tool: PF Withdrawal / Advance Calculator
-  {
-    keywords: ["withdraw", "advance", "claim", "form 31", "form 19", "form 10c", "settlement", "auto-claim", "illness", "marriage", "housing", "construction"],
-    title: "PF Withdrawal Calculator",
-    cta: "Calculate withdrawal limits & eligibility:",
-    url: "https://corporatecompliance.in/tools/pf-withdrawal-calculator",
-    solutionFacts: "Check permissible withdrawal limits under Form 31: up to 100% of employee share for illness, 36 months wages for housing, or 50% for marriage/education."
-  },
-  // 15. Tool: EPS Pension Calculator
-  {
-    keywords: ["pension", "eps", "eps-95", "eps 95", "higher pension", "superannuation", "retirement", "pensioner"],
-    title: "EPS Pension Calculator",
-    cta: "Estimate your monthly EPS pension:",
-    url: "https://corporatecompliance.in/tools/eps-pension-calculator",
-    solutionFacts: "Formula: (Pensionable Salary × Pensionable Service) / 70. Maximum standard pensionable salary capped at ₹15,000 unless higher pension opted."
-  },
-  // 16. Tool: EDLI Life Insurance Calculator
-  {
-    keywords: ["edli", "insurance", "death claim", "nomination", "nominee", "e-nomination", "life cover", "7 lakh", "700000"],
-    title: "EDLI Insurance Calculator",
-    cta: "Calculate EDLI insurance benefit up to ₹7L:",
-    url: "https://corporatecompliance.in/tools/edli-calculator",
-    solutionFacts: "Payout is 35× average monthly salary (max ₹15,000) + 50% average PF balance, capped at ₹7,00,000 for active members."
-  },
-  // 17. Tool: EPF Contribution Calculator
-  {
-    keywords: ["contribution", "wage ceiling", "15,000", "15000", "salary ceiling", "admin charges", "12%", "basic wages", "inspection charges"],
-    title: "EPF Contribution Calculator",
-    cta: "Calculate employer & employee PF split:",
-    url: "https://corporatecompliance.in/tools/epf-contribution-calculator",
-    solutionFacts: "Employee: 12% to EPF. Employer: 3.67% to EPF, 8.33% to EPS (capped at ₹1,250), plus 0.5% EDLI and 0.5% admin charges."
-  },
-  // 18. Tool: Gratuity Calculator
-  {
-    keywords: ["gratuity", "5 years", "service tenure", "gratuity act", "gratuity payout"],
-    title: "Gratuity Calculator",
-    cta: "Calculate your statutory gratuity:",
-    url: "https://corporatecompliance.in/tools/gratuity-calculator",
-    solutionFacts: "Formula: (15 × Last Drawn Salary × Years of Service) / 26. Tax-free limit up to ₹20 Lakhs for eligible employees completing 5 continuous years."
-  },
-  // 19. Tool: Statutory Wiki & SOPs
-  {
-    keywords: ["joint declaration", "sop", "kyc", "aadhaar", "uan", "circular", "rule", "guideline", "court"],
-    title: "EPFO Statutory Wiki & SOPs",
-    cta: "Check EPFO SOPs, rules & guides:",
-    url: "https://corporatecompliance.in/tools/wiki",
-    solutionFacts: "Access official EPFO standard operating procedures, circular archives, and KYC correction guidelines."
-  },
-];
-
-// Fallback resources
-const FALLBACK_RESOURCES = [
-  {
-    title: "Compliance Calculators",
-    cta: "Free EPFO compliance calculators:",
-    url: "https://corporatecompliance.in/tools",
-    solutionFacts: "Access comprehensive EPFO calculators for PF balance, pension, gratuity, and withdrawal limits."
-  },
-  {
-    title: "Corporate Compliance Solutions",
-    cta: "Expert EPFO compliance support:",
-    url: "https://corporatecompliance.in",
-    solutionFacts: "Consult statutory compliance experts for employer audit defense, ECR filing, and grievance resolution."
-  },
-];
-
-// Match topic to the most relevant tool or blog URL
-function matchCorporateResource(text) {
-  const lower = (text || "").toLowerCase();
-  for (const item of CORPORATE_RESOURCES) {
-    if (item.keywords.some((k) => lower.includes(k.toLowerCase()))) {
-      return item;
-    }
-  }
-  return FALLBACK_RESOURCES[Math.floor(Math.random() * FALLBACK_RESOURCES.length)];
-}
-
+// Exported alias for compatibility
+const CORPORATE_RESOURCES = CURATED_RESOURCES;
 // Google Search Analytics & Impression Weights for EPFO Topics
 const HIGH_SEARCH_INTENT_MAP = [
   { regex: /\b(balance|passbook|whatsapp|sms)\b/i, score: 35, tag: "Passbook/Balance" },
@@ -380,8 +204,11 @@ Return JSON: { "selectedIndex": <number>, "selectedHeadline": "<title>" }`;
     selectedPubDate = new Date().toISOString();
   }
 
+  // Dynamically synchronize live website resources from corporatecompliance.in
+  const liveResources = await syncCorporateResources();
+
   // Match the exact tool or blog from corporatecompliance.in
-  const resource = matchCorporateResource(selectedHeadline);
+  const resource = matchCorporateResource(selectedHeadline, liveResources);
   console.log(`🔗 Matched Resource: ${resource.title} (${resource.url})`);
 
   // Prompt Gemini to craft the complete 3-part Thread
@@ -454,6 +281,7 @@ module.exports = {
   CORPORATE_RESOURCES,
   FALLBACK_RESOURCES,
   HIGH_SEARCH_INTENT_MAP,
+  syncCorporateResources,
   matchCorporateResource,
   scoreArticle,
   fetchTopImpressionEpfoNews,
