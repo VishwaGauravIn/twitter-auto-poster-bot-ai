@@ -51,11 +51,11 @@ async function sendTweet(tweetText) {
 }
 
 async function run() {
-  const { tweetText, headline, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
+  const { tweetText, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
 
   console.log("Posting tweet to Twitter API...");
   await sendTweet(tweetText);
-  savePostedHeadline(headline);
+  savePostedHeadline(headline, source, pubDate);
   console.log(`✨ All done! Promoted: ${resourceTitle} (${resourceUrl})`);
 }
 

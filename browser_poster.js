@@ -119,9 +119,9 @@ async function postTweetViaBrowser(tweetText) {
 
 async function main() {
   try {
-    const { tweetText, headline, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
+    const { tweetText, headline, source, pubDate, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
     await postTweetViaBrowser(tweetText);
-    savePostedHeadline(headline);
+    savePostedHeadline(headline, source, pubDate);
     console.log(`✨ All done! Promoted: ${resourceTitle} (${resourceUrl})`);
   } catch (err) {
     console.error("Execution failed:", err.message || err);
