@@ -42,18 +42,23 @@ const generationConfig = {
 
 async function sendTweet(tweetText) {
   try {
-    await twitterClient.v2.tweet(tweetText);
-    console.log("Tweet sent successfully!");
+    const res = await twitterClient.v2.tweet(tweetText);
+    console.log("Tweet sent successfully! Tweet ID:", res.data.id);
   } catch (error) {
-    console.error("Error sending tweet:", error);
+    console.error("Error sending tweet to Twitter:");
+    if (error.data) {
+      console.error(JSON.stringify(error.data, null, 2));
+    } else {
+      console.error(error.message || error);
+    }
     throw error;
   }
 }
 
 async function run() {
-  // Use gemini-1.5-flash (gemini-pro 1.0 is deprecated)
+  // Use gemini-3.5-flash-lite / gemini-3.5-flash
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-3.5-flash-lite",
     generationConfig,
   });
 
@@ -64,14 +69,14 @@ async function run() {
   console.log("Generating tweet content via Gemini AI...");
   const result = await model.generateContent(prompt);
   const response = await result.response;
-  const text = response.text();
-  console.log("Generated Tweet:\n", text);
+  const text = response.text().trim();
+  console.log("\n--- Generated Tweet Content ---\n" + text + "\n-------------------------------\n");
 
   console.log("Posting tweet to Twitter...");
   await sendTweet(text);
 }
 
 run().catch((error) => {
-  console.error("Execution failed:", error);
+  console.error("\nExecution stopped with error:", error.message || error);
   process.exit(1);
 });
