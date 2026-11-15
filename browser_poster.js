@@ -1,10 +1,12 @@
 // Free Browser-based Twitter / X Auto-Poster via Playwright & Microsoft Edge
 // Dedicated for @EPFOCompliance — Posts live EPFO news, circulars & compliance advisories.
+// Automatically matches and promotes https://corporatecompliance.in tools and blogs.
+
 require("dotenv").config();
-const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
 const GenAI = require("@google/generative-ai");
+const { generateEpfoTweet, savePostedHeadline } = require("./epfo_content");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
@@ -14,105 +16,8 @@ if (!GEMINI_API_KEY) {
 
 const genAI = new GenAI.GoogleGenerativeAI(GEMINI_API_KEY);
 const USER_DATA_DIR = path.join(__dirname, ".twitter_user_data");
-const HISTORY_FILE = path.join(__dirname, "posted_articles.json");
-
-// Fetch the most recent EPFO news and blog posts from Google News RSS
-async function fetchLatestEpfoNews() {
-  console.log("📰 Fetching latest published EPFO news & blogs...");
-  try {
-    const res = await fetch(
-      "https://news.google.com/rss/search?q=EPFO+when:2d&hl=en-IN&gl=IN&ceid=IN:en",
-      { headers: { "User-Agent": "Mozilla/5.0" } }
-    );
-    const xml = await res.text();
-    const itemMatches = [...xml.matchAll(/<item>[\s\S]*?<title>(.*?)<\/title>/g)].map(
-      (m) => m[1].replace(/ - .*$/, "").trim()
-    );
-    const headlines = itemMatches.filter((h) => h && !h.includes("Google News"));
-
-    console.log(`Found ${headlines.length} recent EPFO headlines.`);
-    return headlines;
-  } catch (err) {
-    console.warn("⚠️ Could not fetch RSS feed, using compliance topics fallback:", err.message);
-    return [];
-  }
-}
-
-// Load history of previously posted articles to avoid duplicate tweets
-function getPostedHistory() {
-  try {
-    if (fs.existsSync(HISTORY_FILE)) {
-      return JSON.parse(fs.readFileSync(HISTORY_FILE, "utf-8"));
-    }
-  } catch (_) {}
-  return [];
-}
-
-function savePostedHeadline(headline) {
-  try {
-    const history = getPostedHistory();
-    history.push({ headline, postedAt: new Date().toISOString() });
-    // Keep only last 50 items
-    const trimmed = history.slice(-50);
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(trimmed, null, 2));
-  } catch (err) {
-    console.warn("Could not save history:", err.message);
-  }
-}
-
-async function generateEpfoTweet() {
-  const headlines = await fetchLatestEpfoNews();
-  const history = getPostedHistory();
-  const postedSet = new Set(history.map((h) => h.headline));
-
-  // Find the first unposted headline
-  let selectedHeadline = headlines.find((h) => !postedSet.has(h));
-
-  const fallbackTopics = [
-    "EPFO Auto-Claim Settlement limits and eligibility under Form 31 for illness and education",
-    "Mandatory e-Nomination update for EDLI life insurance cover up to ₹7 Lakhs",
-    "Standard Operating Procedure (SOP) for Joint Declaration member profile corrections",
-    "Monthly ECR contribution filing deadlines and compliance checks for establishments",
-    "EPFO interest rate credit status and how to check your digital passbook",
-    "Higher pension EPS-95 calculation options and joint option verification",
-    "UAN-Aadhaar seeding and active mobile link for seamless online withdrawals"
-  ];
-
-  if (!selectedHeadline) {
-    selectedHeadline = fallbackTopics[Math.floor(Math.random() * fallbackTopics.length)];
-    console.log(`ℹ️ All recent news posted. Using curated compliance topic: "${selectedHeadline}"`);
-  } else {
-    console.log(`✨ Selected unposted news: "${selectedHeadline}"`);
-  }
-
-  console.log("🤖 Generating EPFO compliance advisory tweet via Gemini AI...");
-  const model = genAI.getGenerativeModel({
-    model: "gemini-3.5-flash-lite",
-    generationConfig: { maxOutputTokens: 300 },
-  });
-
-  const prompt = `You are @EPFOCompliance, the leading authority on EPFO (Employees' Provident Fund Organisation) rules, circulars, and compliance updates in India.
-
-Context / Latest News: "${selectedHeadline}"
-
-Write a timely, authoritative compliance advisory tweet for PF members, HR professionals, and employers.
-Rules:
-1. Under 230 characters strictly (leave room for hashtags).
-2. Actionable advice: Highlight the rule, deadline, or member benefit (e.g., ECR deadline, KYC seeding, UAN link, Form 31/19, Joint Declaration).
-3. Plain text only. Include 2-3 focused hashtags: #EPFO #EPF #PFCompliance #UAN.
-4. No quotes or markdown fences.`;
-
-  const result = await model.generateContent(prompt);
-  const text = (await result.response).text().trim().replace(/^["']|["']$/g, "");
-
-  return { text, headline: selectedHeadline };
-}
 
 async function postTweetViaBrowser(tweetText) {
-  console.log("\n--- Tweet to Post ---");
-  console.log(tweetText);
-  console.log(`Length: ${tweetText.length} characters\n---------------------\n`);
-
   console.log("🌐 Launching Microsoft Edge browser...");
   const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
     channel: "msedge",
@@ -214,10 +119,10 @@ async function postTweetViaBrowser(tweetText) {
 
 async function main() {
   try {
-    const { text, headline } = await generateEpfoTweet();
-    await postTweetViaBrowser(text);
+    const { tweetText, headline, resourceTitle, resourceUrl } = await generateEpfoTweet(genAI);
+    await postTweetViaBrowser(tweetText);
     savePostedHeadline(headline);
-    console.log("✨ All done! Next tweet scheduled.");
+    console.log(`✨ All done! Promoted: ${resourceTitle} (${resourceUrl})`);
   } catch (err) {
     console.error("Execution failed:", err.message || err);
     process.exit(1);
