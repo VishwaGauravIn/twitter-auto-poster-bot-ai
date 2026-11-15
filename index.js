@@ -51,24 +51,17 @@ async function sendThread(thread, imagePath = null) {
       text: thread[0],
       media: mediaId ? { media_ids: [mediaId] } : undefined,
     });
-    console.log("🎉 Tweet 1/3 posted! ID:", tweet1Res.data.id);
+    console.log(`🎉 Tweet 1/${thread.length} posted! ID:`, tweet1Res.data.id);
 
-    // Tweet 2 (Step-by-step Solution)
-    if (thread.length > 1) {
-      const tweet2Res = await twitterClient.v2.tweet({
-        text: thread[1],
-        reply: { in_reply_to_tweet_id: tweet1Res.data.id },
+    // Chained tweets (Tweet 2 through N)
+    let previousId = tweet1Res.data.id;
+    for (let i = 1; i < thread.length; i++) {
+      const res = await twitterClient.v2.tweet({
+        text: thread[i],
+        reply: { in_reply_to_tweet_id: previousId },
       });
-      console.log("🎉 Tweet 2/3 posted! ID:", tweet2Res.data.id);
-
-      // Tweet 3 (Caveat & Blog Link)
-      if (thread.length > 2) {
-        const tweet3Res = await twitterClient.v2.tweet({
-          text: thread[2],
-          reply: { in_reply_to_tweet_id: tweet2Res.data.id },
-        });
-        console.log("🎉 Tweet 3/3 posted! ID:", tweet3Res.data.id);
-      }
+      console.log(`🎉 Tweet ${i + 1}/${thread.length} posted! ID:`, res.data.id);
+      previousId = res.data.id;
     }
   } catch (error) {
     console.error("Error sending thread to Twitter API:");

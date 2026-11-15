@@ -217,7 +217,7 @@ async function generateEpfoTweet(genAI) {
     model: "gemini-3.5-flash-lite",
     generationConfig: {
       temperature: 0.2,
-      maxOutputTokens: 600,
+      maxOutputTokens: 1200,
       responseMimeType: "application/json"
     },
   });
@@ -281,60 +281,79 @@ Return JSON: { "selectedIndex": <number>, "selectedHeadline": "<title>" }`;
   const resource = matchCorporateResource(selectedHeadline, liveResources);
   console.log(`🔗 Matched Resource: ${resource.title} (${resource.url})`);
 
-  // Prompt Gemini to craft the complete 3-part Thread
+  // Prompt Gemini to craft the complete 5-part Thread
   const threadPrompt = `You are @EPFOCompliance, the leading authority on EPFO rules and statutory compliance in India.
-Write an authoritative, high-engagement 3-part Twitter/X THREAD about this development:
+Write an authoritative, highly comprehensive 5-part Twitter/X THREAD about this development:
 
 News Headline: "${selectedHeadline}"
 Source: "${selectedSource}"
 Source Authority: "${selectedTierName}"
-Topic Facts / Solution from our website guide: "${resource.solutionFacts}"
+Topic Facts & Actionable Solution: "${resource.solutionFacts}"
+Target Blog/Tool Guide URL: "${resource.url}"
 
 CRITICAL RULES FOR EACH TWEET:
-1. TWEET 1 (Hook & Alert):
-   - Crisp announcement of the news and what it means for PF members/employers.
-   - If Source is Official (PIB, Gazette, @officialepfo), state it authoritatively (e.g. "[Official PIB Alert]" or "[Official Gazette Notice]").
-   - End with: "Thread 👇 (1/3)"
-   - STRICT LENGTH: Under 220 characters. NO links or hashtags.
 
-2. TWEET 2 (The Step-by-Step Solution / How-To):
-   - Provide the EXACT ACTIONABLE SOLUTION / STEPS based on the Topic Facts.
-   - Mention the specific phone number, forms, or procedure (e.g. save +91 8796441800, send 'Hi' from registered mobile).
-   - End with: "(2/3)"
-   - STRICT LENGTH: Under 250 characters. NO links or hashtags.
-
-3. TWEET 3 (Key Caution & Blog Link):
-   - Mention key caveats, limits, or scam warnings (e.g. read-only service, auto-settlement limited to ₹1,000, beware of fake numbers).
-   - Direct Call-to-Action with link: "${resource.cta} ${resource.url}"
-   - End with: "#EPFO #PFCompliance (3/3)"
+1. TWEET 1 (Subject Hook, Core Context & Direct Website Reference):
+   - Announce the subject and news clearly according to the headline.
+   - If Source is Official (PIB, Gazette, @officialepfo), prefix authoritatively (e.g. "[Official PIB Alert]" or "[Official Gazette Notice]").
+   - MUST INCLUDE the website reference link: "${resource.cta} ${resource.url}"
+   - Include hashtags: "#EPFO #PFCompliance"
+   - End with: "Thread 👇 (1/5)"
    - STRICT LENGTH: Under 260 characters (the URL automatically counts as 23 characters).
 
-4. CARD INSIGHT:
-   - One crisp sentence (under 115 characters) summarizing the key rule for the high-res infographic card.
+2. TWEET 2 (Background Context & Member/Employer Impact):
+   - Explain the statutory background, why this issue occurs, and who is affected (members or employers).
+   - Detail the practical compliance impact.
+   - End with: "(2/5)"
+   - STRICT LENGTH: Under 265 characters. NO links.
+
+3. TWEET 3 (Actionable Step-by-Step Solution / How-To):
+   - Provide the EXACT procedural steps, official numbers (e.g. WhatsApp +91 8796441800), forms, or portal steps from the Topic Facts.
+   - End with: "(3/5)"
+   - STRICT LENGTH: Under 265 characters. NO links.
+
+4. TWEET 4 (Employer Responsibilities, Penalties & Compliance Math):
+   - Specific details on employer responsibilities, wage ceilings, damages/interest (14B/7Q), or filing deadlines.
+   - Include relevant hashtags (e.g. "#LabourLaw #Payroll").
+   - End with: "(4/5)"
+   - STRICT LENGTH: Under 265 characters. NO links.
+
+5. TWEET 5 (Caveats, Fraud Warnings & Website Promotion CTA):
+   - Critical caveats, read-only limits, or scam warnings (e.g. never share OTPs, beware of fake numbers).
+   - Direct call-to-action promoting the website: "Free statutory calculators & guides: https://corporatecompliance.in"
+   - End with: "#EPFO #PFCompliance #HRIndia (5/5)"
+   - STRICT LENGTH: Under 260 characters (the URL counts as 23 characters).
+
+6. CARD INSIGHT:
+   - One crisp sentence (under 115 characters) summarizing the core statutory rule for the high-res infographic card.
 
 Return JSON in this exact schema:
 {
   "tweet1": "<tweet 1 text>",
   "tweet2": "<tweet 2 text>",
   "tweet3": "<tweet 3 text>",
+  "tweet4": "<tweet 4 text>",
+  "tweet5": "<tweet 5 text>",
   "cardInsight": "<one sentence summary under 115 chars>"
 }`;
 
-  console.log("🧵 Generating 3-part solution thread via Gemini AI...");
+  console.log("🧵 Generating 5-part comprehensive solution thread via Gemini AI...");
   const threadResult = await model.generateContent(threadPrompt);
   const threadData = JSON.parse((await threadResult.response).text());
 
   const tweet1 = (threadData.tweet1 || "").trim();
   const tweet2 = (threadData.tweet2 || "").trim();
   const tweet3 = (threadData.tweet3 || "").trim();
+  const tweet4 = (threadData.tweet4 || "").trim();
+  const tweet5 = (threadData.tweet5 || "").trim();
   const cardInsight = (threadData.cardInsight || tweet1.slice(0, 110)).trim();
 
-  const thread = [tweet1, tweet2, tweet3];
+  const thread = [tweet1, tweet2, tweet3, tweet4, tweet5].filter(Boolean);
 
-  console.log("\n==================== 3-PART THREAD TO POST ====================");
-  console.log(`[Tweet 1/3 - Image Card Attached] (${tweet1.length} chars):\n${tweet1}\n`);
-  console.log(`[Tweet 2/3 - Actionable Solution] (${tweet2.length} chars):\n${tweet2}\n`);
-  console.log(`[Tweet 3/3 - Caveat & Blog Link] (${tweet3.length} chars):\n${tweet3}`);
+  console.log("\n==================== 5-PART THREAD TO POST ====================");
+  thread.forEach((tw, idx) => {
+    console.log(`[Tweet ${idx + 1}/${thread.length}${idx === 0 ? " - Image Card Attached" : ""}] (${tw.length} chars):\n${tw}\n`);
+  });
   console.log("===============================================================\n");
 
   return {

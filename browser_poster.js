@@ -60,36 +60,25 @@ async function postThreadViaBrowser(thread, imagePath = null) {
       console.log("✅ Authenticated as @EPFOCompliance.");
     }
 
-    console.log("📝 Opening tweet composer...");
-    if (!page.url().includes("/home")) {
-      await page.goto("https://x.com/home", { waitUntil: "domcontentloaded", timeout: 30000 });
-      await page.waitForTimeout(2000);
-    }
+    console.log("📝 Navigating directly to dedicated tweet composer (https://x.com/compose/post)...");
+    await page.goto("https://x.com/compose/post", { waitUntil: "domcontentloaded", timeout: 35000 });
+    await page.waitForTimeout(2500);
 
-    // Click the sidebar "Post" button to trigger the modal dialog
-    const sideNavPostBtn = page.locator('a[data-testid="SideNav_NewTweet_Button"], button[data-testid="SideNav_NewTweet_Button"]').first();
-    if (await sideNavPostBtn.isVisible().catch(() => false)) {
-      await sideNavPostBtn.click();
-      await page.waitForTimeout(1500);
-    }
+    // Check if any leftover modal/draft prompt exists and discard it
+    try {
+      const discardBtn = page.locator('button[data-testid="confirmationSheetConfirm"]');
+      if (await discardBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        console.log("🧹 Discarding leftover draft dialog...");
+        await discardBtn.click({ force: true });
+        await page.waitForTimeout(1000);
+      }
+    } catch (_) {}
 
-    // Determine scope: Modal dialog ([role="dialog"]) or inline feed composer
-    let scope = page;
-    const modal = page.locator('div[role="dialog"]').first();
-    const isModalOpen = await modal.isVisible({ timeout: 5000 }).catch(() => false);
-
-    if (isModalOpen) {
-      console.log("🎯 Scoped to active tweet modal dialog...");
-      scope = modal;
-    } else {
-      console.log("ℹ️ Modal not detected, using inline composer...");
-    }
-
-    // 1. Tweet 1 (Hook + Infographic Image)
-    const textbox0 = scope.locator('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]').first();
+    // 1. Tweet 1 (Hook + Direct Reference Link + Infographic Image)
+    const textbox0 = page.locator('div[data-testid="tweetTextarea_0"]').first();
     await textbox0.waitFor({ state: "visible", timeout: 15000 });
 
-    console.log("✍️ Typing Tweet 1/3 (Hook & News Alert)...");
+    console.log(`✍️ Typing Tweet 1/${thread.length} (Subject Hook + Reference Link)...`);
     await textbox0.click({ force: true });
     await page.waitForTimeout(500);
     await page.keyboard.insertText(thread[0]);
@@ -98,64 +87,54 @@ async function postThreadViaBrowser(thread, imagePath = null) {
     // Attach image card to Tweet 1
     if (imagePath && fs.existsSync(imagePath)) {
       console.log("📸 Attaching branded news card image to Tweet 1...");
-      const fileInput = scope.locator('input[data-testid="fileInput"], input[type="file"]').first();
+      const fileInput = page.locator('input[data-testid="fileInput"], input[type="file"]').first();
       await fileInput.setInputFiles(imagePath);
       console.log("⏳ Waiting for image upload preview to render...");
-      await scope.locator('[data-testid="attachments"], div[aria-label="Image"], button[aria-label="Remove media"]').first().waitFor({ state: "visible", timeout: 25000 }).catch(() => {});
+      await page.locator('[data-testid="attachments"], div[aria-label="Image"], button[aria-label="Remove media"]').first().waitFor({ state: "visible", timeout: 25000 }).catch(() => {});
       await page.waitForTimeout(2500);
     }
 
-    // 2. Add Tweet 2 & Tweet 3 to form the thread
-    const addBtn = scope.locator('button[data-testid="addButton"], div[aria-label="Add post"], button[aria-label="Add post"]').first();
-    const canAddPost = await addBtn.isVisible().catch(() => false);
+    // 2. Chained Tweets (Tweet 2 through Tweet N) to form the full thread
+    for (let i = 1; i < thread.length; i++) {
+      console.log(`➕ Clicking 'Add post' to compose Tweet ${i + 1}/${thread.length}...`);
+      const addBtn = page.locator('button[data-testid="addButton"]').first();
+      await addBtn.waitFor({ state: "visible", timeout: 10000 });
+      await addBtn.click({ force: true });
+      await page.waitForTimeout(1200);
 
-    if (canAddPost && thread.length > 1) {
-      console.log("➕ Clicking 'Add post' to compose Tweet 2/3 (Step-by-Step Solution)...");
-      await addBtn.click();
-      await page.waitForTimeout(1000);
-
-      const textbox1 = scope.locator('div[data-testid="tweetTextarea_1"]').first();
-      await textbox1.waitFor({ state: "visible", timeout: 10000 });
-      await textbox1.click({ force: true });
+      const nextTextarea = page.locator(`div[data-testid="tweetTextarea_${i}"]`).first();
+      await nextTextarea.waitFor({ state: "visible", timeout: 10000 });
+      await nextTextarea.click({ force: true });
       await page.waitForTimeout(500);
-      await page.keyboard.insertText(thread[1]);
+      await page.keyboard.insertText(thread[i]);
       await page.waitForTimeout(1000);
-
-      if (thread.length > 2) {
-        console.log("➕ Clicking 'Add post' to compose Tweet 3/3 (Guide & Blog Link)...");
-        await addBtn.click();
-        await page.waitForTimeout(1000);
-
-        const textbox2 = scope.locator('div[data-testid="tweetTextarea_2"]').first();
-        await textbox2.waitFor({ state: "visible", timeout: 10000 });
-        await textbox2.click({ force: true });
-        await page.waitForTimeout(500);
-        await page.keyboard.insertText(thread[2]);
-        await page.waitForTimeout(1000);
-      }
-    } else {
-      console.warn("ℹ️ Native Add post button not found; posting Tweet 1 as main update.");
     }
 
-    // Dismiss any autocomplete popovers
-    await page.keyboard.press("Escape");
-    await page.waitForTimeout(500);
+    // 3. Publish the complete thread atomically via 'Post all'
+    console.log("⏳ Waiting for 'Post all' button to become enabled...");
+    const postAllBtn = page.locator('button[data-testid="tweetButton"]').first();
+    await postAllBtn.waitFor({ state: "visible", timeout: 10000 });
 
-    console.log("🚀 Publishing full thread ('Post all' / Control+Enter)...");
-    const postAllBtn = scope.locator('button[data-testid="tweetButton"]').first();
-    if (await postAllBtn.isVisible().catch(() => false)) {
-      await postAllBtn.click({ force: true });
-    } else {
-      await page.keyboard.press("Control+Enter");
-    }
+    // Ensure the button is active and not aria-disabled
+    await page.waitForFunction(() => {
+      const btn = document.querySelector('button[data-testid="tweetButton"]');
+      return btn && btn.getAttribute("aria-disabled") !== "true" && !btn.disabled;
+    }, { timeout: 25000 });
 
-    // Confirm post modal closes
-    if (isModalOpen) {
-      await modal.waitFor({ state: "hidden", timeout: 25000 }).catch(() => {});
-    }
-    await page.waitForTimeout(4000);
+    console.log("🚀 Clicking 'Post all' to publish full thread...");
+    await postAllBtn.click({ force: true });
 
-    console.log("🎉 Complete 3-part EPFO compliance thread posted successfully to @EPFOCompliance!");
+    // 4. Confirm submission: Wait for the composer textarea to detach (disappear)
+    console.log("⏳ Waiting for Twitter backend to accept thread submission...");
+    await page.locator('div[data-testid="tweetTextarea_0"]').waitFor({ state: "detached", timeout: 35000 }).catch(() => {});
+    await page.waitForTimeout(6000);
+
+    // 5. Verify published thread on live profile
+    console.log("🔍 Navigating to @EPFOCompliance profile to verify live publication...");
+    await page.goto("https://x.com/EPFOCompliance", { waitUntil: "domcontentloaded", timeout: 35000 });
+    await page.waitForTimeout(5000);
+
+    console.log(`🎉 Complete ${thread.length}-part EPFO compliance thread posted successfully to @EPFOCompliance!`);
 
   } catch (err) {
     console.error("❌ Browser automation error:", err.message);
