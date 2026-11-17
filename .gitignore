@@ -1,1 +1,17 @@
 node_modules
+
+secrets.json
+SECRETS.js
+
+# Playwright browser profile session
+.twitter_user_data
+last_error.png
+posted_articles.json
+generated_tweet_image.png
+daily_posting_status.json
+daily_runner.log
+
+# Local tooling & caches
+__pycache__/
+.claude/
+config.bat

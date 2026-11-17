@@ -1,0 +1,12 @@
+{
+  "id": "epfo",
+  "name": "EPFO & PF Compliance (Default)",
+  "accountHandle": "@EPFOCompliance",
+  "brandName": "EPFO COMPLIANCE ALERT",
+  "websiteName": "corporatecompliance.in",
+  "websiteUrl": "https://corporatecompliance.in",
+  "sitemapUrl": "https://corporatecompliance.in/sitemap.xml",
+  "hashtags": ["#EPFO", "#PFCompliance", "#HRIndia", "#LabourLaw"],
+  "focusKeywords": ["EPFO", "PF", "UAN", "EPS", "ECR", "Provident Fund", "Labour Law"],
+  "description": "Default production configuration for EPFO compliance news, official PIB/Gazette alerts, and corporatecompliance.in promotion."
+}

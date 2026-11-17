@@ -1,11 +1,11 @@
 name: Auto Tweet Using AI
 
-# Runs every hour
+# Runs twice daily (09:30 AM IST and 05:30 PM IST)
 on:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 4,12 * * *"
 
-  # This command allows us to run the Action automatically from the Actions tab.
+  # Allows manual triggering from the Actions tab
   workflow_dispatch:
 
 jobs:
@@ -14,12 +14,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@master
+        uses: actions/checkout@v4
+
       - name: Use Node.js
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
           node-version: "20.x"
+
       - name: Install Dependencies
         run: npm i
+
       - name: Run Twitter bot
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm start

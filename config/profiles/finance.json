@@ -1,0 +1,16 @@
+{
+  "id": "finance",
+  "name": "Personal Finance & Market Intelligence",
+  "accountHandle": "@YourFinanceHandle",
+  "brandName": "MARKET INSIGHTS",
+  "websiteName": "yourfinanceblog.com",
+  "websiteUrl": "https://yourfinanceblog.com",
+  "sitemapUrl": "https://yourfinanceblog.com/sitemap.xml",
+  "hashtags": ["#Finance", "#StockMarket", "#Investing", "#Economy", "#Wealth"],
+  "focusKeywords": ["Stocks", "Inflation", "Federal Reserve", "RBI", "Markets", "Economy", "Bonds"],
+  "rssFeeds": [
+    "https://feeds.content.dowjones.io/public/rss/mw_topstories",
+    "https://finance.yahoo.com/news/rssindex"
+  ],
+  "description": "Pre-configured profile for financial markets, macro economy, and investment strategy threads."
+}

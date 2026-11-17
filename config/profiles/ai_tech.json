@@ -1,0 +1,18 @@
+{
+  "id": "ai_tech",
+  "name": "Artificial Intelligence & Technology",
+  "accountHandle": "@YourTechHandle",
+  "brandName": "TECH & AI PULSE",
+  "websiteName": "yourtechblog.com",
+  "websiteUrl": "https://yourtechblog.com",
+  "sitemapUrl": "https://yourtechblog.com/sitemap.xml",
+  "hashtags": ["#AI", "#TechNews", "#MachineLearning", "#OpenSource", "#DevCommunity"],
+  "focusKeywords": ["AI", "LLM", "OpenAI", "Google", "DeepMind", "NVIDIA", "Python", "Cloud", "Software"],
+  "rssFeeds": [
+    "https://news.ycombinator.com/rss",
+    "https://techcrunch.com/feed/",
+    "https://www.theverge.com/rss/index.xml",
+    "https://feeds.arstechnica.com/arstechnica/index"
+  ],
+  "description": "Pre-configured profile for automated Tech & AI news curation with thread breakdowns."
+}
